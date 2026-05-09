@@ -1,0 +1,92 @@
+name: ivm_estoque
+description: A new Flutter project.
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=2.18.0 <3.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.0.0
+  # sqflite: ^2.0.0
+  path: ^1.9.0
+  uuid: ^4.0.0
+  shared_preferences: ^2.0.0
+  multi_select_flutter: ^4.1.3
+  pdf: ^3.12.0
+  http: ^1.6.0
+  brasil_fields: ^1.15.0  # ou maior
+  flutter_cep2: ^1.0.0  # ← PACOTE ATUALIZADO E PERFEITO PARA 2025
+  file_picker: ^10.3.3
+  printing: ^5.14.3
+  url_launcher: ^6.2.2
+  image_picker: ^1.1.2
+  share_plus: ^12.0.1
+  geolocator: ^12.0.0
+  # sqflite_common_ffi: ^2.0.0
+  path_provider: ^2.1.5
+  intl: ^0.20.2
+  supabase_flutter: ^2.8.1  # ou ^2.2.0 (confira no pub.dev)
+  mask_text_input_formatter: ^2.0.0
+  cupertino_icons: ^1.0.2
+  flutter_secure_storage: ^9.2.2
+  image: ^4.2.0  # Para carregar logo como imagem
+  fl_chart: ^1.1.1          # ← ESSA É A GRÁFICA DE PIZZA
+  # signature: ^5.4.0  # Para canvas de assinatura
+  flutter_localizations:
+    sdk: flutter
+  google_fonts: ^8.0.1
+  open_file: ^3.3.2
+  collection: ^1.19.1
+  signature: ^6.3.0  # assinatura digital com dedo
+  connectivity_plus: ^7.0.0
+  reorderables: ^0.6.0
+  universal_html: ^2.2.4        # ajuda com url_launcher no web
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+dev_dependencies:
+    hive_generator: ^2.0.1
+    build_runner: ^2.4.12
+    flutter_test:
+      sdk: flutter
+    flutter_lints: ^6.0.0
+
+flutter:
+  # OBRIGATÓRIO para ícones Material Icons funcionarem
+  uses-material-design: true
+
+  # Assets (imagens, logos, etc.)
+  assets:
+    - assets/logo_satiro_one.png
+    - assets/images/logo.png
+    # Adicione aqui outros assets que você usa, ex:
+    # - assets/images/background.jpg
+
+  # Fontes customizadas
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Regular.ttf
+        - asset: assets/fonts/Roboto-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Roboto-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Roboto-Light.ttf
+          weight: 300
+
+    # Opcional: Noto Sans (para melhor suporte a acentos)
+    - family: NotoSans
+      fonts:
+        - asset: assets/fonts/NotoSans-Regular.ttf
+        - asset: assets/fonts/NotoSans-Bold.ttf
+          weight: 700
+analyzer:
+  errors:
+    unused_import: ignore
+
+  
