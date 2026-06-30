@@ -1,12 +1,12 @@
-name: ivm_estoque
-description: A new Flutter project.
+name: satiro_one
+description: Satiro One - Sistema de Gestão para Automação e Instalações
 
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 2.0.0+1
 
 environment:
-  sdk: '>=2.18.0 <3.0.0'
+  sdk: '>=3.2.0 <4.0.0'
 
 dependencies:
   flutter:
@@ -15,8 +15,10 @@ dependencies:
   # sqflite: ^2.0.0
   path: ^1.9.0
   uuid: ^4.0.0
+  font_awesome_flutter: ^10.7.0
   shared_preferences: ^2.0.0
   multi_select_flutter: ^4.1.3
+  flutter_masked_text2: ^0.9.1
   pdf: ^3.12.0
   http: ^1.6.0
   brasil_fields: ^1.15.0  # ou maior
@@ -36,7 +38,6 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   image: ^4.2.0  # Para carregar logo como imagem
   fl_chart: ^1.1.1          # ← ESSA É A GRÁFICA DE PIZZA
-  # signature: ^5.4.0  # Para canvas de assinatura
   flutter_localizations:
     sdk: flutter
   google_fonts: ^8.0.1

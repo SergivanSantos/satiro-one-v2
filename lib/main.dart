@@ -1,76 +1,62 @@
 // lib/main.dart
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart' as date_symbol;
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// Providers
-import 'models/sac_call.dart';
-import 'providers/employee_provider.dart';
-import 'providers/branch_provider.dart';
-import 'providers/ponto_provider.dart';
-import 'providers/vehicle_provider.dart';
-import 'providers/travel_provider.dart';
-import 'providers/client_provider.dart';
-import 'providers/client_phase_config_provider.dart';
-import 'providers/architect_provider.dart';
-import 'providers/constructor_provider.dart';
-import 'providers/equipment_provider.dart';
-import 'providers/brand_provider.dart';
-import 'providers/category_provider.dart';
-import 'providers/unit_provider.dart';
-import 'providers/supplier_provider.dart';
-import 'providers/birthday_message_provider.dart';
-import 'providers/attendment_provider.dart';
-import 'providers/client_pendency_provider.dart';
-import 'providers/sac_provider.dart';
-import 'providers/settings_provider.dart';
-import 'providers/company_provider.dart';
-import 'providers/checklist_provider.dart';
-import 'providers/tool_catalog_provider.dart';
+// ==================== PROVIDERS ATIVOS ====================
+import 'features/ambiente/providers/ambiente_provider.dart';
+import 'features/auth/providers/auth_provider.dart';
+import 'features/backup/providers/backup_provider.dart';
+import 'features/client/providers/cliente_provider.dart';
+import 'features/fase/providers/fase_provider.dart';
+import 'features/filial/providers/filial_provider.dart';
+import 'features/obra/providers/obra_provider.dart';
+import 'features/obra/providers/obra_wizard_provider.dart';
+import 'features/os/providers/os_provider.dart';
+import 'features/parceiros/providers/parceiros_provider.dart';
+import 'features/pop/providers/pop_provider.dart';
+import 'features/rh/providers/employee_provider.dart';
+import 'features/servicos/providers/servico_provider.dart';
 
-// Telas
-import 'screens/auth/auth_wrapper.dart';
-import 'screens/sac/sac_execution_screen.dart';
+
+
+// ==================== TELAS ====================
+import 'features/auth/screens/auth_wrapper.dart';
+import 'features/obra/screens/obra_wizard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await date_symbol.initializeDateFormatting('pt_BR', null);
 
-  // ==================== NOVO SUPABASE ====================
   await Supabase.initialize(
-    url: 'https://atswwiskotduecvmogku.supabase.co',           // ← MUDE AQUI
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0c3d3aXNrb3RkdWVjdm1vZ2t1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzMzgxMTAsImV4cCI6MjA5MzkxNDExMH0.SMNLiCRMAXVKjONQxAOwVuDN31Jv-AUxy6FoF4tyO-o',       // ← MUDE AQUI
+    url: 'https://atswwiskotduecvmogku.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0c3d3aXNrb3RkdWVjdm1vZ2t1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgzMzgxMTAsImV4cCI6MjA5MzkxNDExMH0.SMNLiCRMAXVKjONQxAOwVuDN31Jv-AUxy6FoF4tyO-o',
     debug: false,
   );
 
   runApp(
     MultiProvider(
       providers: [
+        // Core / Auth
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => EmployeeProvider()),
-        ChangeNotifierProvider(create: (_) => BranchProvider()),
-        ChangeNotifierProvider(create: (_) => PontoProvider()),
-        ChangeNotifierProvider(create: (_) => VehicleProvider()),
-        ChangeNotifierProvider(create: (_) => TravelProvider()),
-        ChangeNotifierProvider(create: (_) => ClientProvider()),
-        ChangeNotifierProvider(create: (_) => ClientPhaseConfigProvider()),
-        ChangeNotifierProvider(create: (_) => ArchitectProvider()),
-        ChangeNotifierProvider(create: (_) => ConstructorProvider()),
-        ChangeNotifierProvider(create: (_) => EquipmentProvider()),
-        ChangeNotifierProvider(create: (_) => BrandProvider()),
-        ChangeNotifierProvider(create: (_) => CategoryProvider()),
-        ChangeNotifierProvider(create: (_) => UnitProvider()),
-        ChangeNotifierProvider(create: (_) => SupplierProvider()),
-        ChangeNotifierProvider(create: (_) => BirthdayMessageProvider()),
-        ChangeNotifierProvider(create: (_) => AttendmentProvider()),
-        ChangeNotifierProvider(create: (_) => ClientPendencyProvider()),
-        ChangeNotifierProvider(create: (_) => SacProvider()),
-        ChangeNotifierProvider(create: (_) => SettingsProvider()),
-        ChangeNotifierProvider(create: (_) => CompanyProvider()),
-        ChangeNotifierProvider(create: (_) => ChecklistProvider()),
-        ChangeNotifierProvider(create: (_) => ToolCatalogProvider()),
+
+        // Features Ativas
+        ChangeNotifierProvider(create: (_) => ClienteProvider()),
+        ChangeNotifierProvider(create: (_) => FilialProvider()),
+        ChangeNotifierProvider(create: (_) => ObraProvider()),
+        ChangeNotifierProvider(create: (_) => ObraWizardProvider()),
+        ChangeNotifierProvider(create: (_) => ParceirosProvider()),
+        ChangeNotifierProvider(create: (_) => PopProvider()),
+        ChangeNotifierProvider(create: (_) => ServicoProvider()),
+        ChangeNotifierProvider(create: (_) => OsProvider()),
+        ChangeNotifierProvider(create: (_) => FaseProvider()),
+        ChangeNotifierProvider(create: (_) => AmbienteProvider()),
+        ChangeNotifierProvider(create: (_) => BackupProvider()),
+
+
       ],
       child: const MyApp(),
     ),
@@ -83,12 +69,69 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Satiro One',                    // ← Nome novo
+      title: 'Satiro One',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.teal,
         useMaterial3: true,
+
+        // ==================== CORES PRINCIPAIS ====================
+        scaffoldBackgroundColor: Colors.grey[50],
+
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF00695C), // teal[900]
+          foregroundColor: Colors.white,
+          elevation: 2,
+          iconTheme: IconThemeData(color: Colors.white),
+          titleTextStyle: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+
+        // ==================== TEXTOS ====================
+        textTheme: const TextTheme(
+          titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+          titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87),
+          bodyLarge: TextStyle(fontSize: 16, color: Colors.black87),
+          bodyMedium: TextStyle(fontSize: 14, color: Colors.black87),
+          labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+
+        // ==================== CARDS ====================
+        cardTheme: CardThemeData(          // ← Corrigido aqui
+          elevation: 3,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          color: Colors.white,
+        ),
+
+        // ==================== BOTÕES ====================
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            elevation: 2,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+
+        // ==================== INPUTS ====================
+        inputDecorationTheme: InputDecorationTheme(
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+
+        // ==================== CHIPS ====================
+        chipTheme: ChipThemeData(
+          backgroundColor: Colors.grey[200],
+          selectedColor: Colors.teal[100],
+          labelStyle: const TextStyle(color: Colors.black87),
+        ),
       ),
+
+      // ==================== LOCALIZAÇÃO ====================
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -99,14 +142,11 @@ class MyApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => const AuthWrapper(),
-        '/sac_execution': (context) {
-          final call = ModalRoute.of(context)!.settings.arguments as SacCall;
-          return SacExecutionScreen(call: call);
-        },
+        '/nova_obra': (context) => const ObraWizardScreen(),
       },
 
       onUnknownRoute: (settings) {
-        print('❌ Rota não encontrada: ${settings.name}');
+        debugPrint('❌ Rota não encontrada: ${settings.name}');
         return MaterialPageRoute(
           builder: (_) => const Scaffold(
             body: Center(child: Text('Rota não encontrada')),
