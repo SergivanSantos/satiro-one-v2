@@ -1,4 +1,0 @@
-{
-  "buildCommand": "curl -sL https://github.com/flutter/flutter/releases/download/3.29.0/flutter_linux_3.29.0-stable.tar.xz -o flutter.tar.xz && tar -xf flutter.tar.xz && export PATH=\"$PWD/flutter/bin:$PATH\" && flutter pub get && flutter build web --release --no-tree-shake-icons",
-  "outputDirectory": "build/web"
-}
