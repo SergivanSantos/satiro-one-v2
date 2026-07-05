@@ -227,6 +227,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
             ),
           ],
+          showingTooltipIndicators: count > 0 ? [0] : [], // Força o tooltip a aparecer
         ),
       );
     }
