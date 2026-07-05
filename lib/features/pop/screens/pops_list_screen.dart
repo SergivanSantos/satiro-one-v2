@@ -43,7 +43,7 @@ class _PopsListScreenState extends State<PopsListScreen> {
           pop.titulo.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           (pop.codigo?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false);
 
-      final matchCategoria = _filtroCategoria == null || pop.categoriaPop == _filtroCategoria;   // ← Alterado
+      final matchCategoria = _filtroCategoria == null || pop.categoriaPop == _filtroCategoria;
 
       return matchSearch && matchCategoria && pop.ativo;
     }).toList();
@@ -120,7 +120,7 @@ class _PopsListScreenState extends State<PopsListScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text("Código: ${pop.codigo ?? '—'}"),
-                        Text(pop.categoriaPop, style: const TextStyle(color: Colors.teal)),   // ← Alterado
+                        Text(pop.categoriaPop, style: const TextStyle(color: Colors.teal)),
                       ],
                     ),
                     trailing: Row(
@@ -157,23 +157,32 @@ class _PopsListScreenState extends State<PopsListScreen> {
 
   // ==================== UPLOAD NOVO POP ====================
   Future<void> _uploadNovoPop() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
-    );
+    try {
+      final result = await FilePicker.platform.pickFiles(   // ← Correção aqui
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
 
-    if (result == null || result.files.isEmpty) return;
+      if (result == null || result.files.isEmpty) return;
 
-    final file = result.files.first;
+      final file = result.files.first;
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PopFormScreen(arquivoSelecionado: file),
-      ),
-    );
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PopFormScreen(arquivoSelecionado: file),
+        ),
+      );
+    } catch (e) {
+      debugPrint("Erro ao selecionar arquivo: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Erro ao selecionar o arquivo")),
+        );
+      }
+    }
   }
 
   // ==================== EDITAR POP ====================

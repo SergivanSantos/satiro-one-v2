@@ -40,17 +40,27 @@ class _PopFormScreenState extends State<PopFormScreen> {
       _tituloController.text = widget.pop!.titulo;
       _codigoController.text = widget.pop!.codigo ?? '';
       _descricaoController.text = widget.pop!.descricao ?? '';
-      _categoriaSelecionada = widget.pop!.categoriaPop;   // ← Atualizado
+      _categoriaSelecionada = widget.pop!.categoriaPop;
     }
   }
 
   Future<void> _selecionarArquivo() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
-    );
-    if (result != null && result.files.isNotEmpty) {
-      setState(() => _arquivoSelecionado = result.files.first);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        setState(() => _arquivoSelecionado = result.files.first);
+      }
+    } catch (e) {
+      debugPrint("Erro ao selecionar arquivo: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Erro ao selecionar o arquivo PDF")),
+        );
+      }
     }
   }
 
@@ -64,7 +74,6 @@ class _PopFormScreenState extends State<PopFormScreen> {
 
     try {
       if (widget.pop == null) {
-        // ==================== CRIAÇÃO ====================
         if (_arquivoSelecionado == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Selecione um arquivo PDF")),
@@ -80,7 +89,6 @@ class _PopFormScreenState extends State<PopFormScreen> {
           descricao: _descricaoController.text.trim().isEmpty ? null : _descricaoController.text.trim(),
         );
       } else {
-        // ==================== EDIÇÃO ====================
         sucesso = await provider.atualizarPop(
           Pop(
             id: widget.pop!.id,
@@ -117,8 +125,6 @@ class _PopFormScreenState extends State<PopFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final popProvider = context.watch<PopProvider>();
-
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.pop == null ? "Novo POP" : "Editar POP"),
@@ -166,9 +172,12 @@ class _PopFormScreenState extends State<PopFormScreen> {
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                           prefixIcon: const Icon(Icons.folder),
                         ),
-                        items: popProvider.categorias
-                            .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
-                            .toList(),
+                        items: const [
+                          DropdownMenuItem(value: 'Administrativos', child: Text('Administrativos')),
+                          DropdownMenuItem(value: 'Operacionais', child: Text('Operacionais')),
+                          DropdownMenuItem(value: 'Técnicos', child: Text('Técnicos')),
+                          DropdownMenuItem(value: 'Segurança', child: Text('Segurança')),
+                        ],
                         onChanged: (value) {
                           if (value != null) setState(() => _categoriaSelecionada = value);
                         },
@@ -191,7 +200,6 @@ class _PopFormScreenState extends State<PopFormScreen> {
 
               const SizedBox(height: 24),
 
-              // Arquivo PDF (só obrigatório na criação)
               Card(
                 elevation: 3,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -200,7 +208,9 @@ class _PopFormScreenState extends State<PopFormScreen> {
                   leading: const Icon(Icons.picture_as_pdf, color: Colors.red, size: 40),
                   title: Text(
                     _arquivoSelecionado?.name ??
-                        (widget.pop?.arquivoUrl != null ? "Arquivo atual: ${widget.pop!.arquivoUrl!.split('/').last}" : "Nenhum arquivo PDF selecionado"),
+                        (widget.pop?.arquivoUrl != null
+                            ? "Arquivo atual: ${widget.pop!.arquivoUrl!.split('/').last}"
+                            : "Nenhum arquivo PDF selecionado"),
                     style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                   trailing: ElevatedButton.icon(
@@ -222,7 +232,6 @@ class _PopFormScreenState extends State<PopFormScreen> {
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                    elevation: 3,
                   ),
                 ),
               ),
