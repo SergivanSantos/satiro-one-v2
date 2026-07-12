@@ -12,8 +12,10 @@ import 'features/backup/providers/backup_provider.dart';
 import 'features/client/providers/cliente_provider.dart';
 import 'features/fase/providers/fase_provider.dart';
 import 'features/filial/providers/filial_provider.dart';
+import 'features/material/providers/material_provider.dart';
 import 'features/obra/providers/obra_provider.dart';
 import 'features/obra/providers/obra_wizard_provider.dart';
+import 'features/obra/providers/ordem_servico_provider.dart';
 import 'features/os/providers/os_provider.dart';
 import 'features/parceiros/providers/parceiros_provider.dart';
 import 'features/pop/providers/pop_provider.dart';
@@ -55,6 +57,9 @@ void main() async {
         ChangeNotifierProvider(create: (_) => FaseProvider()),
         ChangeNotifierProvider(create: (_) => AmbienteProvider()),
         ChangeNotifierProvider(create: (_) => BackupProvider()),
+        ChangeNotifierProvider(create: (_) => MaterialProvider()),
+        ChangeNotifierProvider(create: (_) => FaseProvider()),
+        ChangeNotifierProvider(create: (_) => OrdemServicoProvider()),
 
 
       ],

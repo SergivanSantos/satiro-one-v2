@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../obra/providers/obra_provider.dart';
 import '../../obra/screens/obra_list_screen.dart';
 import '../../obra/models/obra.dart';
+import '../../../widgets/safe_bar_chart.dart'; // ← Importe o widget que criamos
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -17,7 +18,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   List<Map<String, dynamic>> _todasFases = [];
-  String? _selectedFilialId; // null = Todas
+  String? _selectedFilialId;
 
   @override
   void initState() {
@@ -48,7 +49,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<ObraProvider>();
 
-    // Filtra obras pela filial selecionada
     final filteredObras = _selectedFilialId == null
         ? provider.obras
         : provider.obras.where((o) => o.filialId == _selectedFilialId).toList();
@@ -92,9 +92,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Text(f['nome'] ?? ''),
                 )),
               ],
-              onChanged: (value) {
-                setState(() => _selectedFilialId = value);
-              },
+              onChanged: (value) => setState(() => _selectedFilialId = value),
             ),
           ),
         ],
@@ -106,7 +104,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             const Text("Visão Geral das Obras", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            Text("Atualizado agora • ${DateTime.now().hour.toString().padLeft(2,'0')}:${DateTime.now().minute.toString().padLeft(2,'0')}"),
+            Text("Atualizado agora • ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}"),
             const SizedBox(height: 24),
 
             SizedBox(
@@ -227,15 +225,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
             ),
           ],
-          showingTooltipIndicators: count > 0 ? [0] : [], // Força o tooltip a aparecer
         ),
       );
     }
 
-    return BarChart(
-      BarChartData(
+    return SafeBarChart(
+      barGroups: barGroups,
+      dataBuilder: (groups) => BarChartData(
         alignment: BarChartAlignment.spaceAround,
-        maxY: obrasPorFase.values.isEmpty ? 10 : obrasPorFase.values.reduce((a, b) => a > b ? a : b).toDouble() * 1.3,
+        maxY: groups.isEmpty ? 10 : groups.map((g) => g.barRods.first.toY).reduce((a, b) => a > b ? a : b) * 1.3,
         barTouchData: BarTouchData(
           enabled: true,
           touchTooltipData: BarTouchTooltipData(
@@ -244,19 +242,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               final fase = _todasFases[group.x]['nome'] as String;
               return BarTooltipItem(
                 '$fase\n',
-                const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  fontSize: 12,
-                ),
+                const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12),
                 children: [
                   TextSpan(
                     text: rod.toY.toInt().toString(),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                   ),
                 ],
               );
@@ -307,17 +297,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           drawVerticalLine: true,
           horizontalInterval: 1,
           verticalInterval: 0.1,
-          getDrawingHorizontalLine: (value) => const FlLine(
-            color: Color(0xFFE0E0E0),
-            strokeWidth: 2,
-          ),
-          getDrawingVerticalLine: (value) => const FlLine(
-            color: Color(0xFFE0E0E0),
-            strokeWidth: 2,
-          ),
+          getDrawingHorizontalLine: (value) => const FlLine(color: Color(0xFFE0E0E0), strokeWidth: 2),
+          getDrawingVerticalLine: (value) => const FlLine(color: Color(0xFFE0E0E0), strokeWidth: 2),
         ),
         borderData: FlBorderData(show: false),
-        barGroups: barGroups,
+        barGroups: groups,
         groupsSpace: 1,
       ),
     );

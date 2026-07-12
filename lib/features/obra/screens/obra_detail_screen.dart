@@ -13,6 +13,9 @@ import 'obra_estrutura_progresso.dart';
 import '../../fase/screens/obra_fases_screen.dart';
 import '../../servicos/screens/obra_servicos_screen.dart';
 import 'obra_wizard_screen.dart';
+import 'obra_materiais_screen.dart';
+import 'ordem_servico_list_screen.dart';
+import '../providers/ordem_servico_provider.dart';   // ← Novo import
 
 class ObraDetailScreen extends StatefulWidget {
   final Obra obra;
@@ -29,7 +32,7 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
   }
 
   @override
@@ -90,7 +93,6 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
               );
             },
           ),
-          // Botão Alterar Fase (mantido na ordem que você definiu)
           TextButton.icon(
             icon: const Icon(Icons.change_circle, color: Colors.white),
             label: const Text("Alterar Fase", style: TextStyle(color: Colors.white)),
@@ -108,6 +110,8 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
             Tab(text: "Fases"),
             Tab(text: "Estrutura"),
             Tab(text: "Serviços"),
+            Tab(text: "Materiais"),
+            Tab(text: "Ordens de Serviço"),
             Tab(text: "Gastos"),
           ],
         ),
@@ -119,9 +123,22 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
           ObraFasesScreen(obra: widget.obra),
           _buildEstruturaTab(),
           ObraServicosScreen(obra: widget.obra),
+          ObraMateriaisScreen(
+            obraId: widget.obra.id,
+            obraNome: widget.obra.nome,
+          ),
+          _buildOrdensServicoTab(),   // ← Nova aba customizada com botão
           const Center(child: Text("Módulo de Gastos em desenvolvimento", style: TextStyle(fontSize: 18))),
         ],
       ),
+    );
+  }
+
+  // ==================== ABA ORDENS DE SERVIÇO COM BOTÃO ====================
+  Widget _buildOrdensServicoTab() {
+    return OrdemServicoListScreen(
+      obraId: widget.obra.id,
+      obraNome: widget.obra.nome,
     );
   }
 

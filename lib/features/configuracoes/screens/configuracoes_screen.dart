@@ -5,23 +5,20 @@ import 'package:flutter/material.dart';
 import '../../servicos/screens/servico_list_screen.dart';
 import '../../pop/screens/pop_views_screen.dart';
 import '../../obra/screens/sistema_config_list_screen.dart';
-import '../../../features/fase/screens/fase_list_screen.dart';
-
+import '../../fase/screens/fase_list_screen.dart';
 import '../../obra/screens/obra_pisos_screen.dart';
-
-// Ambientes Globais
 import '../../ambiente/screens/ambiente_list_screen.dart';
-
-// NOVO: Backup Global
 import '../../backup/screens/backup_history_screen.dart';
-
 import '../../parceiros/screens/arquitetos_list_screen.dart';
 import '../../parceiros/screens/construtoras_list_screen.dart';
-
 import '../../filial/screens/filiais_list_screen.dart';
 
-import '../../obra/screens/categoria_list_screen.dart';
+// Materiais
+import '../../material/screens/material_list_screen.dart';
+import '../../material/screens/marca_list_screen.dart';
+import '../../material/screens/modelo_list_screen.dart';
 
+import '../../obra/screens/categoria_list_screen.dart';
 import '../../pop/screens/pops_list_screen.dart';
 import '../../pop/screens/categorias_manager_screen.dart';
 import '../../pop/screens/pops_dashboard_screen.dart';
@@ -46,9 +43,11 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
         children: [
           Icon(Icons.settings, size: 80, color: Colors.grey),
           SizedBox(height: 24),
-          Text("Configurações Gerais do Sistema", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey)),
+          Text("Configurações Gerais do Sistema",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey)),
           SizedBox(height: 8),
-          Text("Selecione uma opção no menu lateral", style: TextStyle(fontSize: 16, color: Colors.grey)),
+          Text("Selecione uma opção no menu lateral",
+              style: TextStyle(fontSize: 16, color: Colors.grey)),
         ],
       ),
     );
@@ -87,59 +86,44 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
                   leading: const Icon(Icons.home_work, color: Colors.teal),
                   title: const Text("Obras", style: TextStyle(fontWeight: FontWeight.bold)),
                   children: [
-                    ListTile(
-                      title: const Text("Sistemas"),
-                      onTap: () => _changeScreen(const SistemaConfigListScreen(), "Sistemas"),
-                    ),
-                    ListTile(
-                      title: const Text("Serviços"),
-                      leading: const Icon(Icons.build_circle, color: Colors.orange),
-                      onTap: () => _changeScreen(const ServicoListScreen(), "Serviços"),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.layers_outlined, size: 20),
-                      title: const Text("Pavimentos"),
-                      onTap: () => _changeScreen(const ObraPisosScreen(titulo: "Gerenciar Pavimentos"), "Pavimentos"),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.room_outlined, size: 20),
-                      title: const Text("Ambientes Globais"),
-                      onTap: () => _changeScreen(const AmbienteListScreen(), "Ambientes Globais"),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.flag_outlined, size: 20),
-                      title: const Text("Fases"),
-                      onTap: () => _changeScreen(const FaseListScreen(), "Fases"),
-                    ),
-                    // ==================== NOVO: BACKUP GLOBAL ====================
-                    ListTile(
-                      leading: const Icon(Icons.backup, color: Colors.indigo),
-                      title: const Text("Histórico de Backups"),
-                      subtitle: const Text("Proteção e Restauração"),
-                      onTap: () => _changeScreen(const BackupHistoryScreen(), "Backups"),
-                    ),
+                    ListTile(title: const Text("Sistemas"), onTap: () => _changeScreen(const SistemaConfigListScreen(), "Sistemas")),
+                    ListTile(title: const Text("Serviços"), onTap: () => _changeScreen(const ServicoListScreen(), "Serviços")),
+                    ListTile(title: const Text("Pavimentos"), onTap: () => _changeScreen(const ObraPisosScreen(titulo: "Gerenciar Pavimentos"), "Pavimentos")),
+                    ListTile(title: const Text("Ambientes Globais"), onTap: () => _changeScreen(const AmbienteListScreen(), "Ambientes Globais")),
+                    ListTile(title: const Text("Fases"), onTap: () => _changeScreen(const FaseListScreen(), "Fases")),
+                    ListTile(title: const Text("Categorias"), onTap: () => _changeScreen(const CategoriaListScreen(), "Categorias")),
                   ],
                 ),
 
                 const Divider(),
 
-                // ==================== PRODUTOS ====================
+                // ==================== MATERIAIS ====================
                 ExpansionTile(
                   initiallyExpanded: false,
                   leading: const Icon(Icons.inventory_2, color: Colors.deepPurple),
-                  title: const Text("Produtos", style: TextStyle(fontWeight: FontWeight.bold)),
+                  title: const Text("Materiais", style: TextStyle(fontWeight: FontWeight.bold)),
                   children: [
                     ListTile(
-                      title: const Text("Categorias"),
-                      leading: const Icon(Icons.label, size: 20),
-                      onTap: () => _changeScreen(const CategoriaListScreen(), "Categorias"),
+                      leading: const Icon(Icons.list_alt),
+                      title: const Text("Catálogo Global"),
+                      onTap: () => _changeScreen(const MaterialListScreen(), "Materiais Globais"),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.branding_watermark),
+                      title: const Text("Marcas"),
+                      onTap: () => _changeScreen(const MarcaListScreen(), "Marcas"),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.model_training),
+                      title: const Text("Modelos"),
+                      onTap: () => _changeScreen(const ModeloListScreen(), "Modelos"),
                     ),
                   ],
                 ),
 
                 const Divider(),
 
-                // ==================== PARCEIROS ====================
+                // ==================== OUTROS ====================
                 ExpansionTile(
                   initiallyExpanded: false,
                   leading: const Icon(Icons.people, color: Colors.orange),
@@ -150,40 +134,34 @@ class _ConfiguracoesScreenState extends State<ConfiguracoesScreen> {
                   ],
                 ),
 
-                const Divider(),
-
-                // ==================== FILIAIS ====================
                 ExpansionTile(
                   initiallyExpanded: false,
                   leading: const Icon(Icons.business, color: Colors.indigo),
                   title: const Text("Filiais", style: TextStyle(fontWeight: FontWeight.bold)),
                   children: [
-                    ListTile(
-                      title: const Text("Gerenciar Filiais"),
-                      onTap: () => _changeScreen(const FiliaisListScreen(), "Filiais"),
-                    ),
+                    ListTile(title: const Text("Gerenciar Filiais"), onTap: () => _changeScreen(const FiliaisListScreen(), "Filiais")),
                   ],
                 ),
 
                 const Divider(),
 
-                // ==================== POPs ====================
                 ExpansionTile(
                   initiallyExpanded: false,
                   leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
                   title: const Text("POPs", style: TextStyle(fontWeight: FontWeight.bold)),
                   children: [
-                    ListTile(
-                      leading: const Icon(Icons.dashboard, size: 20),
-                      title: const Text("Dashboard de POPs"),
-                      onTap: () => _changeScreen(const PopsDashboardScreen(), "Dashboard POPs"),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.list_alt, size: 20),
-                      title: const Text("Gerenciar POPs"),
-                      onTap: () => _changeScreen(const PopsListScreen(), "POPs"),
-                    ),
+                    ListTile(title: const Text("Dashboard de POPs"), onTap: () => _changeScreen(const PopsDashboardScreen(), "Dashboard POPs")),
+                    ListTile(title: const Text("Gerenciar POPs"), onTap: () => _changeScreen(const PopsListScreen(), "POPs")),
                   ],
+                ),
+
+                const Divider(),
+
+                // Backup
+                ListTile(
+                  leading: const Icon(Icons.backup, color: Colors.indigo),
+                  title: const Text("Histórico de Backups"),
+                  onTap: () => _changeScreen(const BackupHistoryScreen(), "Backups"),
                 ),
               ],
             ),

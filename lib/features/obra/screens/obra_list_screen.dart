@@ -53,7 +53,7 @@ class _ObraListScreenState extends State<ObraListScreen> with SingleTickerProvid
 
       setState(() {
         _fases = List.from(res);
-        _tabController = TabController(length: _fases.length, vsync: this);
+        _tabController = TabController(length: _fases.length + 1, vsync: this);
         _tabController.addListener(() {
           if (mounted) setState(() => _currentTabIndex = _tabController.index);
         });
@@ -74,40 +74,18 @@ class _ObraListScreenState extends State<ObraListScreen> with SingleTickerProvid
     final provider = context.watch<ObraProvider>();
     final totalObras = provider.obras.length;
 
-    debugPrint("📊 Construindo lista com ${_fases.length} fases e ${provider.obras.length} obras");
-
     if (_fases.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Obras por Fase'), backgroundColor: Colors.teal[900]),
+        appBar: AppBar(title: const Text('Obras'), backgroundColor: Colors.teal[900]),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
-
-    final faseAtual = _fases[_currentTabIndex];
-    final nomeFaseAtual = faseAtual['nome'] as String;
-
-    final obrasDaFase = provider.obras.where((obra) {
-      final matchFase = obra.faseAtualNome == nomeFaseAtual ||
-          (obra.faseAtualNome?.isEmpty != false && obra.status.toUpperCase() == nomeFaseAtual.toUpperCase());
-
-      final matchSearch = _searchTerm.isEmpty ||
-          obra.nome.toLowerCase().contains(_searchTerm.toLowerCase()) ||
-          provider.getClienteNome(obra.clienteId).toLowerCase().contains(_searchTerm.toLowerCase()) ||
-          provider.getArquitetoNome(obra.arquitetoId).toLowerCase().contains(_searchTerm.toLowerCase());
-
-      final matchCliente = _filtroClienteId == null || obra.clienteId == _filtroClienteId;
-      final matchFilial = _filtroFilialId == null || obra.filialId == _filtroFilialId;
-      final matchArquiteto = _filtroArquitetoId == null || obra.arquitetoId == _filtroArquitetoId;
-      final matchConstrutora = _filtroConstrutoraId == null || obra.construtoraId == _filtroConstrutoraId;
-
-      return matchFase && matchSearch && matchCliente && matchFilial && matchArquiteto && matchConstrutora;
-    }).toList();
 
     return Scaffold(
       appBar: AppBar(
         title: Row(
           children: [
-            const Text('Obras por Fase', style: TextStyle(fontSize: 18)),
+            const Text('Obras', style: TextStyle(fontSize: 18)),
             const SizedBox(width: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -175,52 +153,71 @@ class _ObraListScreenState extends State<ObraListScreen> with SingleTickerProvid
               unselectedLabelColor: Colors.white70,
               indicatorColor: Colors.orange[400],
               indicatorWeight: 4,
-              tabs: _fases.map((fase) {
-                final nome = fase['nome'] as String;
-                final count = _getCountForPhase(nome, provider);
-                return Tab(
+              tabs: [
+                // Aba Todas as Obras com contador
+                Tab(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(nome),
-                      Text("$count obras", style: const TextStyle(fontSize: 10, color: Colors.white70)),
+                      const Text("Todas as Obras"),
+                      Text("$totalObras", style: const TextStyle(fontSize: 10, color: Colors.white70)),
                     ],
                   ),
-                );
-              }).toList(),
+                ),
+                // Abas por fase
+                ..._fases.map((fase) {
+                  final nome = fase['nome'] as String;
+                  final count = _getCountForPhase(nome, provider);
+                  return Tab(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(nome),
+                        Text("$count", style: const TextStyle(fontSize: 10, color: Colors.white70)),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ],
             ),
           ),
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: _fases.map((fase) {
-          final nomeFase = fase['nome'] as String;
-          final obrasDaFase = _getObrasDaFase(nomeFase, provider);
+        children: [
+          // Aba "Todas as Obras"
+          _buildAllObrasTab(provider),
 
-          return RefreshIndicator(
-            onRefresh: _carregarFasesEObras,
-            child: obrasDaFase.isEmpty
-                ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.inbox_outlined, size: 80, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text("Nenhuma obra nesta fase"),
-                ],
+          // Abas por fase
+          ..._fases.map((fase) {
+            final nomeFase = fase['nome'] as String;
+            final obrasDaFase = _getObrasDaFase(nomeFase, provider);
+
+            return RefreshIndicator(
+              onRefresh: _carregarFasesEObras,
+              child: obrasDaFase.isEmpty
+                  ? const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.inbox_outlined, size: 80, color: Colors.grey),
+                    SizedBox(height: 16),
+                    Text("Nenhuma obra nesta fase"),
+                  ],
+                ),
+              )
+                  : ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: obrasDaFase.length,
+                itemBuilder: (context, index) {
+                  final obra = obrasDaFase[index];
+                  return _buildObraCard(obra, context, provider);
+                },
               ),
-            )
-                : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: obrasDaFase.length,
-              itemBuilder: (context, index) {
-                final obra = obrasDaFase[index];
-                return _buildObraCard(obra, context, provider);
-              },
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.push(
@@ -233,6 +230,46 @@ class _ObraListScreenState extends State<ObraListScreen> with SingleTickerProvid
     );
   }
 
+  Widget _buildAllObrasTab(ObraProvider provider) {
+    final obrasFiltradas = provider.obras.where((obra) {
+      final matchSearch = _searchTerm.isEmpty ||
+          obra.nome.toLowerCase().contains(_searchTerm.toLowerCase()) ||
+          provider.getClienteNome(obra.clienteId).toLowerCase().contains(_searchTerm.toLowerCase()) ||
+          provider.getArquitetoNome(obra.arquitetoId).toLowerCase().contains(_searchTerm.toLowerCase());
+
+      final matchCliente = _filtroClienteId == null || obra.clienteId == _filtroClienteId;
+      final matchFilial = _filtroFilialId == null || obra.filialId == _filtroFilialId;
+      final matchArquiteto = _filtroArquitetoId == null || obra.arquitetoId == _filtroArquitetoId;
+      final matchConstrutora = _filtroConstrutoraId == null || obra.construtoraId == _filtroConstrutoraId;
+
+      return matchSearch && matchCliente && matchFilial && matchArquiteto && matchConstrutora;
+    }).toList();
+
+    return RefreshIndicator(
+      onRefresh: _carregarFasesEObras,
+      child: obrasFiltradas.isEmpty
+          ? const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.inbox_outlined, size: 80, color: Colors.grey),
+            SizedBox(height: 16),
+            Text("Nenhuma obra encontrada"),
+          ],
+        ),
+      )
+          : ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: obrasFiltradas.length,
+        itemBuilder: (context, index) {
+          final obra = obrasFiltradas[index];
+          return _buildObraCard(obra, context, provider);
+        },
+      ),
+    );
+  }
+
+  // Restante dos métodos (mantidos iguais)
   List<Obra> _getObrasDaFase(String nomeFase, ObraProvider provider) {
     return provider.obras.where((obra) {
       final matchFase = obra.faseAtualNome == nomeFase ||
@@ -257,8 +294,6 @@ class _ObraListScreenState extends State<ObraListScreen> with SingleTickerProvid
   }
 
   Widget _buildObraCard(Obra obra, BuildContext context, ObraProvider provider) {
-    debugPrint("🛠️ Construindo card para obra: ${obra.nome} | Fase: ${obra.faseAtualNome} | Fim Previsto: ${obra.dataFimPrevistaFase}");
-
     final dateFormat = DateFormat('dd/MM');
 
     return Card(

@@ -23,20 +23,27 @@ class _FaseListScreenState extends State<FaseListScreen> {
   }
 
   Future<void> _carregarFases() async {
+    if (!mounted) return;
     setState(() => isLoading = true);
+
     try {
+      debugPrint("🔄 [FaseListScreen] Carregando fases...");
+
       final res = await Supabase.instance.client
           .from('fase')
           .select()
           .eq('ativo', true)
           .order('ordem', ascending: true);
 
-      fases = res.map<Fase>((f) => Fase.fromMap(f)).toList();
-
-      debugPrint("✅ ${fases.length} fases carregadas");
+      if (mounted) {
+        setState(() {
+          fases = res.map<Fase>((f) => Fase.fromMap(f)).toList();
+        });
+        debugPrint("✅ ${fases.length} fases carregadas");
+      }
     } catch (e) {
       debugPrint('❌ Erro ao carregar fases: $e');
-      fases = [];
+      if (mounted) setState(() => fases = []);
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -55,11 +62,6 @@ class _FaseListScreenState extends State<FaseListScreen> {
       debugPrint("✅ Ordem das fases salva com sucesso");
     } catch (e) {
       debugPrint("❌ Erro ao salvar ordem: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Erro ao salvar ordem"), backgroundColor: Colors.orange),
-        );
-      }
     }
   }
 
@@ -79,18 +81,20 @@ class _FaseListScreenState extends State<FaseListScreen> {
       ),
     );
 
-    if (confirm != true) return;
+    if (confirm != true || !mounted) return;
 
     try {
       await Supabase.instance.client.from('fase').update({'ativo': false}).eq('id', fase.id);
-      _carregarFases();
+      await _carregarFases();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Fase desativada com sucesso"), backgroundColor: Colors.green),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erro ao desativar fase: $e"), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erro ao desativar fase: $e"), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -115,6 +119,7 @@ class _FaseListScreenState extends State<FaseListScreen> {
         padding: const EdgeInsets.all(12),
         itemCount: fases.length,
         onReorder: (oldIndex, newIndex) {
+          if (!mounted) return;
           setState(() {
             if (newIndex > oldIndex) newIndex--;
             final item = fases.removeAt(oldIndex);
@@ -142,6 +147,12 @@ class _FaseListScreenState extends State<FaseListScreen> {
                       backgroundColor: Colors.orange,
                       labelStyle: TextStyle(fontSize: 12),
                     ),
+                  if (fase.exigeOrdemServico)
+                    const Chip(
+                      label: Text("OS"),
+                      backgroundColor: Colors.blue,
+                      labelStyle: TextStyle(fontSize: 12),
+                    ),
                   const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.edit, color: Colors.blue),
@@ -165,6 +176,8 @@ class _FaseListScreenState extends State<FaseListScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => FaseFormScreen(fase: fase)),
-    ).then((_) => _carregarFases());
+    ).then((_) {
+      if (mounted) _carregarFases();
+    });
   }
 }

@@ -7,6 +7,7 @@ class Fase {
   final bool ativo;
   final bool exigeChecklist;
   final String? checklistNome;
+  final bool exigeOrdemServico;   // ← Novo campo
 
   Fase({
     required this.id,
@@ -16,6 +17,7 @@ class Fase {
     this.ativo = true,
     this.exigeChecklist = false,
     this.checklistNome,
+    this.exigeOrdemServico = false,   // ← Novo
   });
 
   factory Fase.fromMap(Map<String, dynamic> map) {
@@ -27,6 +29,7 @@ class Fase {
       ativo: map['ativo'] ?? true,
       exigeChecklist: map['exige_checklist'] ?? false,
       checklistNome: map['checklist_nome'],
+      exigeOrdemServico: map['exige_ordem_servico'] ?? false,   // ← Novo
     );
   }
 
@@ -38,6 +41,7 @@ class Fase {
       'ativo': ativo,
       'exige_checklist': exigeChecklist,
       'checklist_nome': checklistNome,
+      'exige_ordem_servico': exigeOrdemServico,   // ← Novo
     };
   }
 }
