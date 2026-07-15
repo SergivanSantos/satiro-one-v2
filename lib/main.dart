@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ==================== PROVIDERS ATIVOS ====================
 import 'features/ambiente/providers/ambiente_provider.dart';
+import 'features/atendimento/providers/atendimento_provider.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/backup/providers/backup_provider.dart';
 import 'features/chamado/providers/chamado_provider.dart';
@@ -64,6 +65,9 @@ void main() async {
         ChangeNotifierProvider(create: (_) => OrdemServicoProvider()),
         ChangeNotifierProvider(create: (_) => OrdemAtendimentoProvider()),
         ChangeNotifierProvider(create: (_) => ChamadoProvider()),
+        ChangeNotifierProvider(create: (_) => AtendimentoProvider()),
+
+
 
 
       ],

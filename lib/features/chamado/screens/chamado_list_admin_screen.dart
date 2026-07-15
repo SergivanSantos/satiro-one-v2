@@ -8,8 +8,9 @@ import '../providers/chamado_provider.dart';
 import '../models/chamado.dart';
 import '../../rh/providers/employee_provider.dart';
 import '../../obra/providers/obra_provider.dart';
-import '../../../features/client/providers/cliente_provider.dart'; // ← Para nome do cliente
+import '../../client/providers/cliente_provider.dart';
 import '../../filial/providers/filial_provider.dart';
+import '../../servicos/providers/servico_provider.dart';
 import 'chamado_execucao_screen.dart';
 import 'chamado_form_screen.dart';
 
@@ -30,16 +31,25 @@ class _ChamadoListAdminScreenState extends State<ChamadoListAdminScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _carregarDados();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _carregarDados());
   }
 
   Future<void> _carregarDados() async {
     await context.read<ChamadoProvider>().carregarTodosChamados();
     await context.read<ObraProvider>().loadObras();
     await context.read<FilialProvider>().carregarFiliais();
-    await context.read<ClienteProvider>().carregarClientes(); // ← Para nomes de cliente
+    await context.read<ClienteProvider>().carregarClientes();
+    await context.read<ServicoProvider>().carregarServicos();
+
+    // Pré-carrega serviços de todas as obras dos chamados
+    final chamados = context.read<ChamadoProvider>().chamados;
+    final obrasIds = chamados.map((c) => c.obraId).toSet();
+    final servicoProvider = context.read<ServicoProvider>();
+    for (var obraId in obrasIds) {
+      if (obraId.isNotEmpty) {
+        await servicoProvider.carregarServicosDaObra(obraId);
+      }
+    }
   }
 
   Future<void> _selecionarData() async {
@@ -65,12 +75,10 @@ class _ChamadoListAdminScreenState extends State<ChamadoListAdminScreen> {
     final obraProvider = context.watch<ObraProvider>();
 
     return chamadoProvider.chamados.where((c) {
-      // Filtro por data
       final dataChamado = DateFormat('yyyy-MM-dd').format(c.dataAgendada);
       final dataSelecionada = DateFormat('yyyy-MM-dd').format(_selectedDate);
       if (dataChamado != dataSelecionada) return false;
 
-      // Filtro por filial
       if (_selectedFilialId == null) return true;
 
       final obra = obraProvider.obras.firstWhereOrNull((o) => o.id == c.obraId);
@@ -102,45 +110,28 @@ class _ChamadoListAdminScreenState extends State<ChamadoListAdminScreen> {
       ),
       body: Column(
         children: [
-          // Cabeçalho: Data com setas + Filial
+          // Cabeçalho com calendário e filtro
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             color: Colors.grey.shade50,
             child: Row(
               children: [
-                // Setas de navegação
-                IconButton(
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: () => _alterarDia(-1),
-                ),
-
-                // Data atual
+                IconButton(icon: const Icon(Icons.chevron_left), onPressed: () => _alterarDia(-1)),
                 Expanded(
                   child: InkWell(
                     onTap: _selecionarData,
                     child: Column(
                       children: [
-                        Text(
-                          _weekdayFormat.format(_selectedDate).toUpperCase(),
-                          style: const TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                        Text(
-                          _dateFormat.format(_selectedDate),
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                        ),
+                        Text(_weekdayFormat.format(_selectedDate).toUpperCase(),
+                            style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        Text(_dateFormat.format(_selectedDate),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                       ],
                     ),
                   ),
                 ),
-
-                IconButton(
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: () => _alterarDia(1),
-                ),
-
+                IconButton(icon: const Icon(Icons.chevron_right), onPressed: () => _alterarDia(1)),
                 const SizedBox(width: 16),
-
-                // Filtro Filial (com nome real)
                 Expanded(
                   child: DropdownButtonFormField<String?>(
                     value: _selectedFilialId,
@@ -157,9 +148,7 @@ class _ChamadoListAdminScreenState extends State<ChamadoListAdminScreen> {
                         child: Text(f.nome),
                       )),
                     ],
-                    onChanged: (value) {
-                      setState(() => _selectedFilialId = value);
-                    },
+                    onChanged: (value) => setState(() => _selectedFilialId = value),
                   ),
                 ),
               ],
@@ -170,16 +159,7 @@ class _ChamadoListAdminScreenState extends State<ChamadoListAdminScreen> {
             child: RefreshIndicator(
               onRefresh: _carregarDados,
               child: chamados.isEmpty
-                  ? const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.event_busy, size: 64, color: Colors.grey),
-                    SizedBox(height: 16),
-                    Text("Nenhum chamado nesta data"),
-                  ],
-                ),
-              )
+                  ? const Center(child: Text("Nenhum chamado nesta data"))
                   : ListView.builder(
                 padding: const EdgeInsets.all(12),
                 itemCount: chamados.length,
@@ -200,7 +180,7 @@ class _ChamadoListAdminScreenState extends State<ChamadoListAdminScreen> {
                         child: Text(chamado.status[0].toUpperCase()),
                       ),
                       title: Text(
-                        chamado.obraNome ?? "Obra sem nome",
+                        obra?.nome ?? chamado.obraNome ?? "Obra sem nome",
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
                       subtitle: Column(
@@ -208,7 +188,6 @@ class _ChamadoListAdminScreenState extends State<ChamadoListAdminScreen> {
                         children: [
                           Text("Cliente: ${cliente?.nome ?? '—'}"),
                           Text("Técnico: ${chamado.tecnicoNome ?? 'Não atribuído'}"),
-                          const SizedBox(height: 4),
                           InkWell(
                             onTap: () => _mostrarServicosPopup(chamado),
                             child: Text(
@@ -226,13 +205,24 @@ class _ChamadoListAdminScreenState extends State<ChamadoListAdminScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
+                            icon: const Icon(Icons.play_arrow, color: Colors.green),
+                            tooltip: "Executar Chamado",
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ChamadoExecucaoScreen(chamado: chamado),
+                                ),
+                              ).then((_) => _carregarDados());
+                            },
+                          ),
+                          IconButton(
                             icon: const Icon(Icons.person, color: Colors.blue),
-                            tooltip: "Alterar/Remover Técnico",
+                            tooltip: "Alterar Técnico",
                             onPressed: () => _alterarTecnicoRapido(chamado),
                           ),
                           IconButton(
                             icon: const Icon(Icons.edit, color: Colors.orange),
-                            tooltip: "Editar",
                             onPressed: () {
                               Navigator.push(
                                 context,
@@ -244,7 +234,6 @@ class _ChamadoListAdminScreenState extends State<ChamadoListAdminScreen> {
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),
-                            tooltip: "Excluir",
                             onPressed: () => _excluirChamado(chamado),
                           ),
                         ],
@@ -269,21 +258,58 @@ class _ChamadoListAdminScreenState extends State<ChamadoListAdminScreen> {
   }
 
   void _mostrarServicosPopup(Chamado chamado) {
+    final servicoProvider = context.read<ServicoProvider>();
+    final servicosObra = servicoProvider.getServicosDaObra(chamado.obraId);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Serviços incluídos neste chamado"),
+        title: Text("Serviços do Chamado (${chamado.servicosIds.length})"),
         content: SizedBox(
           width: double.maxFinite,
-          height: 300,
+          height: 420,
           child: chamado.servicosIds.isEmpty
               ? const Center(child: Text("Nenhum serviço selecionado"))
               : ListView.builder(
             itemCount: chamado.servicosIds.length,
             itemBuilder: (context, index) {
+              final servicoId = chamado.servicosIds[index];
+
+              // Serviço global (nome + POP)
+              final servicoGlobal = servicoProvider.servicos.firstWhereOrNull((s) => s.id == servicoId);
+
+              // Serviço da obra (status + observações)
+              final servicoObra = servicosObra.firstWhereOrNull(
+                    (s) => s['servico_id']?.toString() == servicoId,
+              );
+
+              final nome = servicoGlobal?.nome ?? "ID: $servicoId";
+              final observacoes = servicoObra?['observacoes']?.toString() ?? 'Sem observações';
+              final statusRaw = (servicoObra?['status'] ?? 'nao_iniciado').toString().toLowerCase();
+
+              String statusText = "Não Iniciado";
+              Color statusColor = Colors.blueGrey;
+
+              if (statusRaw == 'concluido') {
+                statusText = "✅ Concluído";
+                statusColor = Colors.green;
+              } else if (statusRaw == 'pendente') {
+                statusText = "⚠️ Pendente";
+                statusColor = Colors.orange;
+              } else if (statusRaw == 'em_andamento') {
+                statusText = "🔄 Em Andamento";
+                statusColor = Colors.amber;
+              }
+
               return ListTile(
-                leading: const Icon(Icons.build_circle),
-                title: Text("ID: ${chamado.servicosIds[index]}"),
+                leading: const Icon(Icons.build_circle, color: Colors.teal),
+                title: Text(nome, style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text(observacoes.isNotEmpty ? observacoes : 'Sem observações'),
+                trailing: Chip(
+                  label: Text(statusText),
+                  backgroundColor: statusColor.withOpacity(0.15),
+                  labelStyle: TextStyle(color: statusColor, fontWeight: FontWeight.bold),
+                ),
               );
             },
           ),
@@ -295,6 +321,7 @@ class _ChamadoListAdminScreenState extends State<ChamadoListAdminScreen> {
     );
   }
 
+  // Métodos _alterarTecnicoRapido e _excluirChamado mantidos iguais (ou copie do anterior se necessário)
   void _alterarTecnicoRapido(Chamado chamado) {
     final employeeProvider = context.read<EmployeeProvider>();
     final tecnicos = employeeProvider.employees

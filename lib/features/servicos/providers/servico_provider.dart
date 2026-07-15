@@ -6,19 +6,20 @@ import '../models/servico.dart';
 
 class ServicoProvider extends ChangeNotifier {
   final _supabase = Supabase.instance.client;
+
+  // ==================== SERVIÇOS GLOBAIS ====================
   List<Servico> _servicos = [];
   List<Servico> get servicos => _servicos;
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  // ==================== SERVIÇOS GLOBAIS ====================
   Future<void> carregarServicos() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      debugPrint("🔄 [ServicoProvider] Iniciando carregamento de serviços...");
+      debugPrint("🔄 [ServicoProvider] Iniciando carregamento de serviços globais...");
 
       final response = await _supabase
           .from('servico')
@@ -31,9 +32,9 @@ class ServicoProvider extends ChangeNotifier {
           .map((json) => Servico.fromMap(json))
           .toList();
 
-      debugPrint("✅ [ServicoProvider] ${_servicos.length} serviços carregados com sucesso");
+      debugPrint("✅ ${_servicos.length} serviços globais carregados");
     } catch (e) {
-      debugPrint("❌ [ServicoProvider] ERRO ao carregar serviços: $e");
+      debugPrint("❌ ERRO ao carregar serviços globais: $e");
       _servicos = [];
     } finally {
       _isLoading = false;
@@ -41,42 +42,38 @@ class ServicoProvider extends ChangeNotifier {
     }
   }
 
-  // ==================== SERVIÇOS POR OBRA ====================
-  List<Map<String, dynamic>> _servicosDaObra = [];
-  List<Map<String, dynamic>> get servicosDaObra => _servicosDaObra;
+  // ==================== SERVIÇOS POR OBRA (MAPA - EVITA SOBRESCREVER) ====================
+  final Map<String, List<Map<String, dynamic>>> _servicosPorObra = {};
 
-  Future<void> carregarServicosDaObra(String obraId) async {
-    try {
-      debugPrint("🔄 Carregando serviços da obra $obraId (com POP)");
-
-      final res = await _supabase
-          .from('obra_servico')
-          .select('''
-          *,
-          servico!inner (
-            *,
-            pop:pop_id (*)
-          )
-        ''')
-          .eq('obra_id', obraId)
-          .order('created_at');
-
-      _servicosDaObra = List.from(res);
-      debugPrint("✅ ${_servicosDaObra.length} serviços da obra carregados com POP");
-
-      // Debug detalhado
-      for (var item in _servicosDaObra) {
-        final servicoMap = item['servico'] as Map? ?? {};
-        final pop = servicoMap['pop'] as Map? ?? {};
-        debugPrint("   → Serviço: ${servicoMap['nome']} | popUrl: ${pop['arquivo_url']}");
-      }
-    } catch (e) {
-      debugPrint("❌ Erro ao carregar serviços da obra: $e");
-      _servicosDaObra = [];
-    }
+  List<Map<String, dynamic>> getServicosDaObra(String obraId) {
+    return _servicosPorObra[obraId] ?? [];
   }
 
-  // ==================== SERVIÇOS POR FASE ====================
+  Future<void> carregarServicosDaObra(String obraId, {String? faseId}) async {
+    try {
+      debugPrint("🔄 Carregando serviços da obra $obraId | fase: ${faseId ?? 'todas'}");
+
+      var query = _supabase
+          .from('obra_servico')
+          .select('*, servico(*, categoria(nome))')
+          .eq('obra_id', obraId);
+
+      if (faseId != null && faseId.isNotEmpty) {
+        query = query.eq('fase_id', faseId);
+      }
+
+      final res = await query.order('created_at');
+
+      _servicosPorObra[obraId] = List.from(res);
+      debugPrint("✅ ${_servicosPorObra[obraId]!.length} serviços carregados para obra $obraId");
+    } catch (e) {
+      debugPrint("❌ Erro ao carregar serviços da obra $obraId: $e");
+      _servicosPorObra[obraId] = [];
+    }
+    notifyListeners();
+  }
+
+  // ==================== SERVIÇOS POR FASE (mantido para compatibilidade) ====================
   List<Map<String, dynamic>> _servicosDaFase = [];
   List<Map<String, dynamic>> get servicosDaFase => _servicosDaFase;
 
@@ -100,13 +97,14 @@ class ServicoProvider extends ChangeNotifier {
     }
   }
 
+  // ==================== OUTROS MÉTODOS (mantidos) ====================
   Future<List<Servico>> buscarPorIds(List<String> ids) async {
     if (ids.isEmpty) return [];
 
     try {
       final response = await _supabase
           .from('servico')
-          .select()
+          .select('*, categoria(nome)')
           .inFilter('id', ids)
           .eq('ativo', true);
 
@@ -114,7 +112,7 @@ class ServicoProvider extends ChangeNotifier {
           .map((json) => Servico.fromMap(json))
           .toList();
     } catch (e) {
-      debugPrint("❌ [ServicoProvider] Erro ao buscar serviços por IDs: $e");
+      debugPrint("❌ Erro ao buscar por IDs: $e");
       return [];
     }
   }

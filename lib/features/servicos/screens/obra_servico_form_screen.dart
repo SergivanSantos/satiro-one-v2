@@ -10,7 +10,7 @@ class SelectedService {
   String? faseId;
   String? ambienteId;
   String? grupoId;
-  String status = 'pendente';
+  String status = 'nao_iniciado';
   String? observacoes;
   int quantidade = 1;
   List<String> descricoes = [];
@@ -56,6 +56,7 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
   Future<void> _carregarDados() async {
     setState(() => _isLoadingData = true);
     try {
+      // Grupos
       final resGrupos = await Supabase.instance.client
           .from('servico_grupo')
           .select()
@@ -63,6 +64,7 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
           .order('ordem');
       _gruposDisponiveis = List.from(resGrupos);
 
+      // Serviços globais
       final resServicos = await Supabase.instance.client
           .from('servico')
           .select('*, categoria(nome)')
@@ -71,6 +73,7 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
           .order('nome');
       _servicosDisponiveis = resServicos.map<Servico>((s) => Servico.fromMap(s)).toList();
 
+      // Fases da obra
       final resFases = await Supabase.instance.client
           .from('obra_fase')
           .select('*, fase(*)')
@@ -78,6 +81,7 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
           .order('ordem', ascending: true);
       _fasesDaObra = List.from(resFases);
 
+      // Ambientes
       final resAmbientes = await Supabase.instance.client
           .from('obra_ambiente')
           .select('*, pavimento(*)')
@@ -102,13 +106,12 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
     final selected = SelectedService(servico);
     selected.faseId = item['fase_id'];
     selected.ambienteId = item['ambiente_id'];
-    selected.grupoId = item['grupo_id'] ?? servicoData['grupo_id'];
-    selected.status = item['status'] ?? 'pendente';
+    selected.grupoId = item['grupo_id'];
+    selected.status = item['status'] ?? 'nao_iniciado';
     selected.observacoes = item['observacoes'];
     selected.quantidade = 1;
 
     _selectedServices.add(selected);
-
     final categoria = servico.categoria ?? 'Sem categoria';
     _expandedCategories.add(categoria);
   }
@@ -119,7 +122,21 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
       if (exists) {
         _selectedServices.removeWhere((s) => s.servico.id == servico.id);
       } else {
-        _selectedServices.add(SelectedService(servico));
+        final newService = SelectedService(servico);
+
+        // === AUTO VINCULAR FASE PELA CATEGORIA ===
+        final categoria = servico.categoria?.toLowerCase().trim() ?? '';
+        final faseCorrespondente = _fasesDaObra.firstWhereOrNull((f) {
+          final nomeFase = (f['fase']?['nome']?.toString() ?? '').toLowerCase().trim();
+          return nomeFase == categoria || nomeFase.contains(categoria);
+        });
+
+        if (faseCorrespondente != null) {
+          newService.faseId = faseCorrespondente['fase_id']?.toString();
+          debugPrint("✅ Fase auto-vinculada: ${faseCorrespondente['fase']?['nome']}");
+        }
+
+        _selectedServices.add(newService);
       }
     });
   }
@@ -162,7 +179,7 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(isEditing ? "✅ Serviço atualizado!" : "${batch.length} registros salvos com sucesso!"),
+            content: Text(isEditing ? "✅ Serviço atualizado!" : "${batch.length} serviços salvos com sucesso!"),
             backgroundColor: Colors.green,
           ),
         );
@@ -194,7 +211,6 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
               children: _buildServicosPorCategoria(),
             ),
           ),
-
           if (_selectedServices.isNotEmpty)
             Container(
               padding: const EdgeInsets.all(16),
@@ -205,7 +221,10 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Selecionados: ${_selectedServices.length}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text(
+                    "Selecionados: ${_selectedServices.length}",
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
@@ -264,23 +283,14 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
                           children: [
                             Expanded(
                               child: DropdownButtonFormField<String?>(
-                                value: selected.faseId,
-                                decoration: const InputDecoration(labelText: "Fase", isDense: true),
-                                items: [
-                                  const DropdownMenuItem(value: null, child: Text("Sem fase")),
-                                  ..._fasesDaObra.map((f) => DropdownMenuItem(value: f['fase_id'], child: Text(f['fase']?['nome']?.toString() ?? ''))),
-                                ],
-                                onChanged: (value) => setState(() => selected.faseId = value),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: DropdownButtonFormField<String?>(
                                 value: selected.ambienteId,
                                 decoration: const InputDecoration(labelText: "Ambiente", isDense: true),
                                 items: [
                                   const DropdownMenuItem(value: null, child: Text("Sem ambiente")),
-                                  ..._ambientesDaObra.map((a) => DropdownMenuItem(value: a['id'], child: Text(a['nome']?.toString() ?? ''))),
+                                  ..._ambientesDaObra.map((a) => DropdownMenuItem(
+                                    value: a['id'],
+                                    child: Text(a['nome']?.toString() ?? ''),
+                                  )),
                                 ],
                                 onChanged: (value) => setState(() => selected.ambienteId = value),
                               ),
@@ -292,7 +302,10 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
                                 decoration: const InputDecoration(labelText: "Grupo", isDense: true),
                                 items: [
                                   const DropdownMenuItem(value: null, child: Text("Sem grupo")),
-                                  ..._gruposDisponiveis.map((g) => DropdownMenuItem(value: g['id'], child: Text(g['nome']?.toString() ?? ''))),
+                                  ..._gruposDisponiveis.map((g) => DropdownMenuItem(
+                                    value: g['id'],
+                                    child: Text(g['nome']?.toString() ?? ''),
+                                  )),
                                 ],
                                 onChanged: (value) => setState(() => selected.grupoId = value),
                               ),
@@ -301,7 +314,6 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Quantidade
                         Row(
                           children: [
                             const Text("Quantidade:", style: TextStyle(fontWeight: FontWeight.w500)),
@@ -316,7 +328,6 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
                                   final q = int.tryParse(value) ?? 1;
                                   setState(() {
                                     selected.quantidade = q.clamp(1, 20);
-                                    // Ajusta lista de descrições
                                     if (selected.descricoes.length < selected.quantidade) {
                                       selected.descricoes.addAll(List.filled(selected.quantidade - selected.descricoes.length, ''));
                                     } else if (selected.descricoes.length > selected.quantidade) {
@@ -331,7 +342,6 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
 
                         const SizedBox(height: 12),
 
-                        // Campos de descrição individuais
                         ...List.generate(selected.quantidade, (i) {
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 8),
@@ -343,9 +353,7 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
                               ),
                               controller: TextEditingController(text: selected.descricoes.length > i ? selected.descricoes[i] : ''),
                               onChanged: (text) {
-                                if (selected.descricoes.length > i) {
-                                  selected.descricoes[i] = text;
-                                }
+                                if (selected.descricoes.length > i) selected.descricoes[i] = text;
                               },
                             ),
                           );
@@ -364,7 +372,7 @@ class _ObraServicoFormScreenState extends State<ObraServicoFormScreen> {
   }
 }
 
-// Extensão para firstWhereOrNull
+// Extensão
 extension IterableExtension<T> on Iterable<T> {
   T? firstWhereOrNull(bool Function(T element) test) {
     for (var element in this) {
