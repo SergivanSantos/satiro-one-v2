@@ -26,9 +26,8 @@ class OrdemServicoProvider extends ChangeNotifier {
       ordens = res.map<OrdemServico>((o) => OrdemServico.fromMap(o)).toList();
       debugPrint("✅ ${ordens.length} ordens carregadas para a obra $obraId");
 
-      // Log dos serviços para debug
       for (var ordem in ordens) {
-        debugPrint("   → Ordem '${ordem.titulo}' | Serviços: ${ordem.servicosIds.length} | IDs: ${ordem.servicosIds}");
+        debugPrint("   → Ordem '${ordem.titulo}' | Serviços: ${ordem.servicosIds.length} | Responsáveis: ${ordem.responsaveisIds}");
       }
     } catch (e) {
       debugPrint("❌ Erro ao carregar ordens de serviço: $e");
@@ -40,13 +39,43 @@ class OrdemServicoProvider extends ChangeNotifier {
 
   Future<bool> salvarOrdem(OrdemServico ordem) async {
     try {
-      debugPrint("📤 Salvando ordem: ${ordem.titulo} (fase: ${ordem.faseId})");
+      debugPrint("📤 Salvando nova ordem: ${ordem.titulo} (fase: ${ordem.faseId})");
       await supabase.from('ordem_servico').insert(ordem.toMap());
       await carregarOrdensDaObra(ordem.obraId);
       debugPrint("✅ Ordem salva com sucesso");
       return true;
     } catch (e) {
       debugPrint("❌ Erro ao salvar ordem de serviço: $e");
+      return false;
+    }
+  }
+
+  Future<bool> atualizarOrdem(OrdemServico ordem) async {
+    try {
+      debugPrint("🔄 Atualizando ordem ${ordem.id}");
+      debugPrint("   Responsáveis (raw): ${ordem.responsaveisIds}");
+
+      // Converte tudo para String explicitamente
+      final responsaveisString = ordem.responsaveisIds
+          .map((id) => id.toString().trim())
+          .where((id) => id.isNotEmpty)
+          .toList();
+
+      await supabase
+          .from('ordem_servico')
+          .update({
+        'status': ordem.status,
+        'responsaveis_ids': responsaveisString.isNotEmpty ? responsaveisString : null,
+        'servicos_ids': ordem.servicosIds.isNotEmpty ? ordem.servicosIds : null,
+      })
+          .eq('id', ordem.id);
+
+      await carregarOrdensDaObra(ordem.obraId);
+      debugPrint("✅ Ordem atualizada com sucesso");
+      return true;
+    } catch (e, stack) {
+      debugPrint("❌ Erro ao atualizar ordem: $e");
+      debugPrint("Stack: $stack");
       return false;
     }
   }
@@ -68,21 +97,18 @@ class OrdemServicoProvider extends ChangeNotifier {
   }
 
   // Carrega apenas as ordens atribuídas ao técnico logado
-  Future<void> carregarOrdensDoTecnico() async {
-    try {
-      final currentEmployee = EmployeeProvider().currentEmployee; // Ajuste se for singleton ou use context
-      final tecnicoId = currentEmployee?.id?.toString();
-
-      if (tecnicoId == null) {
-        debugPrint("⚠️ Nenhum técnico logado");
-        ordens = [];
-        notifyListeners();
-        return;
-      }
-
-      isLoading = true;
+  Future<void> carregarOrdensDoTecnico(String tecnicoId) async {
+    if (tecnicoId.isEmpty) {
+      debugPrint("⚠️ Nenhum técnico logado (ID vazio)");
+      ordens = [];
       notifyListeners();
+      return;
+    }
 
+    isLoading = true;
+    notifyListeners();
+
+    try {
       debugPrint("🔄 Carregando ordens do técnico: $tecnicoId");
 
       final res = await supabase
@@ -146,7 +172,6 @@ class OrdemServicoProvider extends ChangeNotifier {
           continue;
         }
 
-        // Busca serviços da fase
         final servicosRes = await supabase
             .from('obra_servico')
             .select('servico_id')
@@ -179,4 +204,24 @@ class OrdemServicoProvider extends ChangeNotifier {
       debugPrint("Stack: $stack");
     }
   }
+
+  // Carregar TODAS as ordens (usado no formulário de chamado)
+  Future<void> carregarTodasOrdens() async {
+    try {
+      debugPrint("🔄 Carregando todas as ordens para formulário...");
+
+      final res = await supabase
+          .from('ordem_servico')
+          .select('*, obra:obra_id(nome), fase:fase_id(nome)')
+          .order('created_at', ascending: false);
+
+      ordens = res.map<OrdemServico>((o) => OrdemServico.fromMap(o)).toList();
+
+      debugPrint("✅ ${ordens.length} ordens totais carregadas");
+    } catch (e) {
+      debugPrint("❌ Erro ao carregar todas ordens: $e");
+      ordens = [];
+    }
+  }
+
 }

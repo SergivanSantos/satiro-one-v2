@@ -4,8 +4,11 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import '../../rh/providers/employee_provider.dart';
-import '../providers/ordem_servico_provider.dart';
-import 'ordem_servico_atendimento_screen.dart';
+import '../../chamado/providers/chamado_provider.dart';
+import '../../chamado/screens/chamado_execucao_screen.dart';
+import '../../obra/providers/obra_provider.dart';
+import '../../client/providers/cliente_provider.dart';
+import '../../servicos/screens/obra_servico_form_screen.dart';
 
 class TecnicoHomeScreen extends StatefulWidget {
   const TecnicoHomeScreen({super.key});
@@ -15,35 +18,77 @@ class TecnicoHomeScreen extends StatefulWidget {
 }
 
 class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
-  final DateFormat _dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+  DateTime _selectedDate = DateTime.now();
+  final DateFormat _dateFormat = DateFormat('dd/MM/yyyy');
+  final DateFormat _weekdayFormat = DateFormat('EEE', 'pt_BR');
+
+  Future<void> _carregarDados() async {
+    final employeeProvider = context.read<EmployeeProvider>();
+    final chamadoProvider = context.read<ChamadoProvider>();
+    final obraProvider = context.read<ObraProvider>();
+    final clienteProvider = context.read<ClienteProvider>();
+
+    final current = employeeProvider.currentEmployee;
+    final tecnicoId = current?.id;
+    final nome = current?.name?.split(' ').first ?? 'Técnico';
+
+    debugPrint("🔄 Técnico Home - Usuário: $nome | ID: $tecnicoId | Data: ${_dateFormat.format(_selectedDate)}");
+
+    if (tecnicoId != null) {
+      await chamadoProvider.carregarChamadosDoTecnico(tecnicoId, data: _selectedDate);
+    } else {
+      Future.delayed(const Duration(milliseconds: 300), _carregarDados);
+      return;
+    }
+
+    await obraProvider.loadObras();
+    await clienteProvider.carregarClientes();
+  }
+
+  Future<void> _selecionarData() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2025),
+      lastDate: DateTime(2028),
+    );
+    if (date != null && mounted) {
+      setState(() => _selectedDate = date);
+      _carregarDados();
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<OrdemServicoProvider>().carregarOrdensDoTecnico(); // Método que vamos criar
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _carregarDados());
   }
 
   @override
   Widget build(BuildContext context) {
     final employeeProvider = context.watch<EmployeeProvider>();
-    final ordemProvider = context.watch<OrdemServicoProvider>();
+    final chamadoProvider = context.watch<ChamadoProvider>();
+    final obraProvider = context.watch<ObraProvider>();
+    final clienteProvider = context.watch<ClienteProvider>();
 
-    final tecnicoNome = employeeProvider.currentEmployee?.name?.split(' ').first ?? 'Técnico';
-    final ordensDoTecnico = ordemProvider.ordens; // Filtrar por técnico logado
+    final current = employeeProvider.currentEmployee;
+    final tecnicoNome = current?.name?.split(' ').first ?? 'Técnico';
+    final chamadosDoDia = chamadoProvider.chamados;
 
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Painel do Técnico'),
-        backgroundColor: Colors.orange[700],
+        backgroundColor: Colors.teal[700],
+        title: Row(
+          children: [
+            const Text("Olá, ", style: TextStyle(fontSize: 18, color: Colors.white)),
+            Text(tecnicoNome, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+          ],
+        ),
         actions: [
+          IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _carregarDados),
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => ordemProvider.carregarOrdensDoTecnico(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout, color: Colors.white),
             onPressed: () async {
               await employeeProvider.logout();
               if (mounted) Navigator.pushReplacementNamed(context, '/');
@@ -51,72 +96,104 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
           ),
         ],
       ),
+
       body: RefreshIndicator(
-        onRefresh: () => ordemProvider.carregarOrdensDoTecnico(),
-        child: ordensDoTecnico.isEmpty
-            ? const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.engineering_outlined, size: 80, color: Colors.grey),
-              SizedBox(height: 16),
-              Text('Nenhum chamado alocado no momento', style: TextStyle(fontSize: 18)),
-              Text('Quando houver ordens atribuídas a você, elas aparecerão aqui.',
-                  style: TextStyle(color: Colors.grey)),
-            ],
-          ),
-        )
-            : ListView.builder(
-          padding: const EdgeInsets.all(12),
-          itemCount: ordensDoTecnico.length,
-          itemBuilder: (context, index) {
-            final ordem = ordensDoTecnico[index];
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              elevation: 3,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: ListTile(
-                contentPadding: const EdgeInsets.all(16),
-                leading: CircleAvatar(
-                  backgroundColor: _getStatusColor(ordem.status),
-                  child: const Icon(Icons.assignment, color: Colors.white),
-                ),
-                title: Text(ordem.titulo ?? 'Sem título', style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        onRefresh: _carregarDados,
+        child: Column(
+          children: [
+            // Cabeçalho de Data
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: Colors.white,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today, color: Colors.teal),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_weekdayFormat.format(_selectedDate).toUpperCase(), style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                          Text(_dateFormat.format(_selectedDate), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ],
+                  ),
+                  TextButton.icon(
+                    onPressed: _selecionarData,
+                    icon: const Icon(Icons.edit_calendar, size: 20),
+                    label: const Text("Outra data"),
+                  ),
+                ],
+              ),
+            ),
+
+            Expanded(
+              child: chamadosDoDia.isEmpty
+                  ? const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text("Obra: ${ordem.obraNome ?? '—'}"),
-                    Text("Fase: ${ordem.faseNome ?? '—'}"),
-                    if (ordem.dataInicioPrevista != null)
-                      Text("Início previsto: ${_dateFormat.format(ordem.dataInicioPrevista!)}"),
+                    Icon(Icons.assignment_outlined, size: 70, color: Colors.grey),
+                    SizedBox(height: 16),
+                    Text("Nenhum chamado para esta data", style: TextStyle(fontSize: 18)),
                   ],
                 ),
-                trailing: Chip(
-                  label: Text(ordem.status.toUpperCase()),
-                  backgroundColor: _getStatusColor(ordem.status).withOpacity(0.15),
-                  labelStyle: TextStyle(color: _getStatusColor(ordem.status)),
-                ),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => OrdemServicoAtendimentoScreen(ordem: ordem),
+              )
+                  : ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: chamadosDoDia.length,
+                itemBuilder: (context, index) {
+                  final chamado = chamadosDoDia[index];
+                  final obra = obraProvider.obras.firstWhereOrNull((o) => o.id == chamado.obraId);
+                  final cliente = clienteProvider.clientes.firstWhereOrNull((c) => c.id == obra?.clienteId);
+
+                  final clienteNome = cliente?.nome ?? chamado.clienteNome ?? '—';
+                  final qtdServicos = chamado.servicosIds.length; // ← Contagem dos serviços selecionados
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(16),
+                      leading: const CircleAvatar(
+                        backgroundColor: Colors.teal,
+                        child: Icon(Icons.assignment, color: Colors.white),
+                      ),
+                      title: Text(
+                        obra?.nome ?? chamado.obraNome ?? 'Obra sem nome',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Cliente: $clienteNome"),
+                          Text("Data: ${_dateFormat.format(chamado.dataAgendada)}"),
+                          Text("Serviços: $qtdServicos", style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.teal)),
+                        ],
+                      ),
+                      trailing: chamado.status == 'concluido'
+                          ? const Icon(Icons.check_circle, color: Colors.green, size: 28)
+                          : const Icon(Icons.access_time, color: Colors.orange, size: 28),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ChamadoExecucaoScreen(chamado: chamado),
+                          ),
+                        );
+                      },
                     ),
                   );
                 },
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'concluida': return Colors.green;
-      case 'em_andamento': return Colors.orange;
-      default: return Colors.blue;
-    }
   }
 }

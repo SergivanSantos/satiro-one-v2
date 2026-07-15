@@ -12,6 +12,7 @@ class ServicoProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
+  // ==================== SERVIÇOS GLOBAIS ====================
   Future<void> carregarServicos() async {
     _isLoading = true;
     notifyListeners();
@@ -19,12 +20,11 @@ class ServicoProvider extends ChangeNotifier {
     try {
       debugPrint("🔄 [ServicoProvider] Iniciando carregamento de serviços...");
 
-      // ← SEM JOIN para evitar erro de coluna
       final response = await _supabase
           .from('servico')
-          .select()
+          .select('*, categoria(nome)')
           .eq('ativo', true)
-          .order('categoria', ascending: true)
+          .order('categoria_id', ascending: true)
           .order('nome', ascending: true);
 
       _servicos = (response as List)
@@ -38,6 +38,65 @@ class ServicoProvider extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  // ==================== SERVIÇOS POR OBRA ====================
+  List<Map<String, dynamic>> _servicosDaObra = [];
+  List<Map<String, dynamic>> get servicosDaObra => _servicosDaObra;
+
+  Future<void> carregarServicosDaObra(String obraId) async {
+    try {
+      debugPrint("🔄 Carregando serviços da obra $obraId (com POP)");
+
+      final res = await _supabase
+          .from('obra_servico')
+          .select('''
+          *,
+          servico!inner (
+            *,
+            pop:pop_id (*)
+          )
+        ''')
+          .eq('obra_id', obraId)
+          .order('created_at');
+
+      _servicosDaObra = List.from(res);
+      debugPrint("✅ ${_servicosDaObra.length} serviços da obra carregados com POP");
+
+      // Debug detalhado
+      for (var item in _servicosDaObra) {
+        final servicoMap = item['servico'] as Map? ?? {};
+        final pop = servicoMap['pop'] as Map? ?? {};
+        debugPrint("   → Serviço: ${servicoMap['nome']} | popUrl: ${pop['arquivo_url']}");
+      }
+    } catch (e) {
+      debugPrint("❌ Erro ao carregar serviços da obra: $e");
+      _servicosDaObra = [];
+    }
+  }
+
+  // ==================== SERVIÇOS POR FASE ====================
+  List<Map<String, dynamic>> _servicosDaFase = [];
+  List<Map<String, dynamic>> get servicosDaFase => _servicosDaFase;
+
+  Future<void> carregarServicosDaFase(String obraId, String faseId) async {
+    try {
+      debugPrint("🔄 Carregando serviços da obra $obraId | fase $faseId");
+
+      final res = await _supabase
+          .from('obra_servico')
+          .select('*, servico(*, categoria(nome))')
+          .eq('obra_id', obraId)
+          .eq('fase_id', faseId)
+          .order('created_at');
+
+      _servicosDaFase = List.from(res);
+      debugPrint("✅ ${_servicosDaFase.length} serviços carregados para esta fase");
+      notifyListeners();
+    } catch (e) {
+      debugPrint("❌ Erro ao carregar serviços da fase: $e");
+      _servicosDaFase = [];
     }
   }
 

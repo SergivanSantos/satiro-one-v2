@@ -9,12 +9,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'features/ambiente/providers/ambiente_provider.dart';
 import 'features/auth/providers/auth_provider.dart';
 import 'features/backup/providers/backup_provider.dart';
+import 'features/chamado/providers/chamado_provider.dart';
 import 'features/client/providers/cliente_provider.dart';
 import 'features/fase/providers/fase_provider.dart';
 import 'features/filial/providers/filial_provider.dart';
 import 'features/material/providers/material_provider.dart';
 import 'features/obra/providers/obra_provider.dart';
 import 'features/obra/providers/obra_wizard_provider.dart';
+import 'features/obra/providers/ordem_atendimento_provider.dart';
 import 'features/obra/providers/ordem_servico_provider.dart';
 import 'features/os/providers/os_provider.dart';
 import 'features/parceiros/providers/parceiros_provider.dart';
@@ -60,6 +62,8 @@ void main() async {
         ChangeNotifierProvider(create: (_) => MaterialProvider()),
         ChangeNotifierProvider(create: (_) => FaseProvider()),
         ChangeNotifierProvider(create: (_) => OrdemServicoProvider()),
+        ChangeNotifierProvider(create: (_) => OrdemAtendimentoProvider()),
+        ChangeNotifierProvider(create: (_) => ChamadoProvider()),
 
 
       ],

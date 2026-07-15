@@ -14,7 +14,10 @@ import '../configuracoes/screens/configuracoes_screen.dart';
 
 // Telas específicas
 import '../obra/screens/tecnico_home_screen.dart';
-import '../os/screens/os_list_screen.dart';
+
+// === NOVAS TELAS DE CHAMADOS ===
+import '../chamado/screens/chamado_list_tecnico_screen.dart';
+import '../../features/chamado/screens/chamado_list_admin_screen.dart'; // vamos criar no próximo lote
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -44,10 +47,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final role = (employeeProvider.currentEmployee?.role ?? 'tecnico').toLowerCase();
     final userName = employeeProvider.currentEmployee?.name?.split(' ').first ?? 'Usuário';
 
+    // Se for técnico → vai direto para a tela simples dele
     if (role == 'tecnico') {
       return const TecnicoHomeScreen();
     }
 
+    // Admin / Gerente → menu completo
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 62,
@@ -69,7 +74,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               Tab(icon: Icon(Icons.home_work, size: 18), text: "Obras"),
               Tab(icon: Icon(Icons.people, size: 18), text: "Clientes"),
               Tab(icon: Icon(Icons.group, size: 18), text: "Equipe"),
-              Tab(icon: Icon(Icons.assignment_turned_in, size: 18), text: "Chamados"),
+              Tab(icon: Icon(Icons.assignment, size: 18), text: "Chamados"),
               Tab(icon: Icon(Icons.settings, size: 18), text: "Config."),
             ],
           ),
@@ -122,7 +127,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ObraListScreen(),
           ClientesListScreen(),
           EmployeeListScreen(),
-          OsListScreen(),
+          ChamadoListAdminScreen(),   // ← Nova tela de Chamados (Admin)
           ConfiguracoesScreen(),
         ],
       ),
