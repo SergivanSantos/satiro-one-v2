@@ -50,7 +50,7 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
           .where((s) => widget.chamado.servicosIds.contains(s['servico_id']?.toString()))
           .toList();
 
-      debugPrint("✅ ${_servicosDoChamado.length} serviços filtrados");
+      debugPrint("✅ ${_servicosDoChamado.length} serviços filtrados para este chamado");
     } catch (e) {
       debugPrint("❌ Erro ao carregar serviços do chamado: $e");
     } finally {
@@ -58,7 +58,7 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
     }
   }
 
-  // ==================== ABRIR POP ====================
+  // ==================== ABRIR POP (CORRIGIDO) ====================
   Future<void> _abrirPOP(String? url) async {
     if (url == null || url.isEmpty) {
       if (mounted) {
@@ -74,11 +74,13 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
     try {
       final uri = Uri.parse(url.trim());
 
+      // Tenta abrir externamente primeiro (melhor para PDF)
       bool launched = await launchUrl(
         uri,
         mode: LaunchMode.externalApplication,
       );
 
+      // Fallback para navegador interno
       if (!launched) {
         launched = await launchUrl(
           uri,
@@ -95,7 +97,7 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
       debugPrint("❌ Erro ao abrir POP: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("❌ Erro ao abrir: $e")),
+          SnackBar(content: Text("❌ Erro: $e")),
         );
       }
     }
@@ -250,9 +252,6 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
           final statusAtual = (item['status'] ?? 'nao_iniciado').toString().toLowerCase();
 
           final bool jaConcluido = statusAtual == 'concluido';
-          final bool temPOP = servicoGlobal?.popUrl != null && servicoGlobal!.popUrl!.isNotEmpty;
-
-          debugPrint("📌 Serviço $nomeServico | POP: $temPOP | URL: ${servicoGlobal?.popUrl}");
 
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
@@ -269,13 +268,12 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // ÍCONE POP - CORRIGIDO
-                  if (temPOP)
+                  if (servicoGlobal?.popUrl != null && servicoGlobal!.popUrl!.isNotEmpty)
                     IconButton(
                       icon: const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28),
-                      tooltip: servicoGlobal?.popTitulo ?? 'Abrir POP',
-                      onPressed: () => _abrirPOP(servicoGlobal!.popUrl),
+                      tooltip: servicoGlobal.popTitulo ?? 'Abrir POP',
+                      onPressed: () => _abrirPOP(servicoGlobal.popUrl),
                     ),
-
                   IconButton(
                     icon: const Icon(Icons.check_circle, color: Colors.green),
                     onPressed: jaConcluido ? null : () => _abrirModalConcluir(item),

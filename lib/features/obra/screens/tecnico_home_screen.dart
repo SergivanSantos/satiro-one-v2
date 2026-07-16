@@ -23,7 +23,13 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   final DateFormat _dateFormat = DateFormat('dd/MM/yyyy');
   final DateFormat _weekdayFormat = DateFormat('EEE', 'pt_BR');
 
+  bool _isLoading = false;
+
   Future<void> _carregarDados() async {
+    if (!mounted) return;
+
+    setState(() => _isLoading = true);
+
     final employeeProvider = context.read<EmployeeProvider>();
     final chamadoProvider = context.read<ChamadoProvider>();
     final obraProvider = context.read<ObraProvider>();
@@ -36,27 +42,29 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
 
     debugPrint("🔄 Técnico Home - Usuário: $nome | ID: $tecnicoId | Data: ${_dateFormat.format(_selectedDate)}");
 
-    if (tecnicoId != null) {
-      await chamadoProvider.carregarChamadosDoTecnico(tecnicoId, data: _selectedDate);
-    } else {
-      Future.delayed(const Duration(milliseconds: 300), _carregarDados);
-      return;
-    }
-
-    await obraProvider.loadObras();
-    await clienteProvider.carregarClientes();
-    await servicoProvider.carregarServicos();
-
-    // Pré-carrega serviços de TODAS as obras dos chamados
-    final obrasIds = chamadoProvider.chamados.map((c) => c.obraId).toSet();
-    for (var obraId in obrasIds) {
-      if (obraId.isNotEmpty) {
-        await servicoProvider.carregarServicosDaObra(obraId);
-        debugPrint("✅ Serviços carregados para obra: $obraId");
+    try {
+      if (tecnicoId != null) {
+        await chamadoProvider.carregarChamadosDoTecnico(tecnicoId, data: _selectedDate);
       }
-    }
 
-    if (mounted) setState(() {});
+      await Future.wait([
+        obraProvider.loadObras(),
+        clienteProvider.carregarClientes(),
+        servicoProvider.carregarServicos(),
+      ]);
+
+      // Pré-carrega serviços de todas as obras dos chamados
+      final obrasIds = chamadoProvider.chamados.map((c) => c.obraId).toSet();
+      for (var obraId in obrasIds) {
+        if (obraId.isNotEmpty) {
+          await servicoProvider.carregarServicosDaObra(obraId);
+        }
+      }
+    } catch (e) {
+      debugPrint("❌ Erro ao carregar dados: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _selecionarData() async {
@@ -73,9 +81,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   }
 
   void _alterarDia(int dias) {
-    setState(() {
-      _selectedDate = _selectedDate.add(Duration(days: dias));
-    });
+    setState(() => _selectedDate = _selectedDate.add(Duration(days: dias)));
     _carregarDados();
   }
 
@@ -118,14 +124,13 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
           ),
         ],
       ),
-
       body: RefreshIndicator(
         onRefresh: _carregarDados,
         child: Column(
           children: [
-            // Calendário com setas
+            // Calendário compacto
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               color: Colors.white,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -148,7 +153,9 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
             ),
 
             Expanded(
-              child: chamadosDoDia.isEmpty
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : chamadosDoDia.isEmpty
                   ? const Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -165,25 +172,18 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
                 itemBuilder: (context, index) {
                   final chamado = chamadosDoDia[index];
                   final obra = obraProvider.obras.firstWhereOrNull((o) => o.id == chamado.obraId);
-                  final cliente = clienteProvider.clientes.firstWhereOrNull((c) => c.id == obra?.clienteId);
 
+                  // Busca nome do cliente diretamente
+                  final cliente = clienteProvider.clientes.firstWhereOrNull((c) => c.id == obra?.clienteId);
                   final clienteNome = cliente?.nome ?? chamado.clienteNome ?? '—';
 
-                  // === CONTAGEM REAL POR OBRA ===
-                  int qtdConcluido = 0;
-                  int qtdPendente = 0;
-                  int qtdSemAtendimento = 0;
+                  int qtdConcluido = 0, qtdPendente = 0, qtdSemAtendimento = 0;
 
                   final servicosObra = servicoProvider.getServicosDaObra(chamado.obraId);
 
                   for (var servicoId in chamado.servicosIds) {
-                    final servicoObra = servicosObra.firstWhereOrNull(
-                          (s) => s['servico_id']?.toString() == servicoId,
-                    );
-
+                    final servicoObra = servicosObra.firstWhereOrNull((s) => s['servico_id']?.toString() == servicoId);
                     final status = (servicoObra?['status'] ?? 'nao_iniciado').toString().toLowerCase();
-
-                    debugPrint("🔍 Serviço $servicoId - Status: $status (Obra: ${obra?.nome ?? '—'})");
 
                     if (status == 'concluido') qtdConcluido++;
                     else if (status == 'pendente') qtdPendente++;
@@ -196,14 +196,8 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     child: ListTile(
                       contentPadding: const EdgeInsets.all(16),
-                      leading: const CircleAvatar(
-                        backgroundColor: Colors.teal,
-                        child: Icon(Icons.assignment, color: Colors.white),
-                      ),
-                      title: Text(
-                        obra?.nome ?? chamado.obraNome ?? 'Obra sem nome',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
+                      leading: const CircleAvatar(backgroundColor: Colors.teal, child: Icon(Icons.assignment, color: Colors.white)),
+                      title: Text(obra?.nome ?? chamado.obraNome ?? 'Obra sem nome', style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -227,10 +221,8 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) => ChamadoExecucaoScreen(chamado: chamado),
-                          ),
-                        ).then((_) => _carregarDados()); // Recarrega ao voltar
+                          MaterialPageRoute(builder: (_) => ChamadoExecucaoScreen(chamado: chamado)),
+                        ).then((_) => _carregarDados());
                       },
                     ),
                   );
@@ -246,10 +238,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   Widget _buildStatusChip(IconData icon, Color color, int count) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-      ),
+      decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

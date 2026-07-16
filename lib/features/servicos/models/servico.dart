@@ -26,7 +26,7 @@ class Servico {
   });
 
   factory Servico.fromMap(Map<String, dynamic> map) {
-    final popData = map['pop'] as Map<String, dynamic>?;
+    final popData = map['pops'] as Map<String, dynamic>?;   // ← Corrigido (plural)
     final categoriaData = map['categoria'] as Map<String, dynamic>?;
 
     return Servico(
@@ -41,7 +41,7 @@ class Servico {
       ativo: map['ativo'] ?? true,
       popId: map['pop_id']?.toString() ?? popData?['id']?.toString(),
       popTitulo: popData?['titulo']?.toString(),
-      popUrl: popData?['arquivo_url']?.toString(),
+      popUrl: popData?['arquivo_url']?.toString(),   // ← Deve funcionar agora
     );
   }
 

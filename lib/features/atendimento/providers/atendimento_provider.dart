@@ -1,94 +1,104 @@
 // lib/features/atendimento/providers/atendimento_provider.dart
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AtendimentoProvider extends ChangeNotifier {
   final supabase = Supabase.instance.client;
 
-  // ==================== MÉTODO ANTIGO (mantido para compatibilidade) ====================
-  Future<bool> atualizarAtendimento({
-    required String obraServicoId,
-    required String status,
-    String? solucaoPendencia,
-    String? fotoPendenciaUrl,
-  }) async {
-    try {
-      final data = {
-        'status': status,
-        'updated_at': DateTime.now().toIso8601String(),
-      };
+  Future<List<String>> uploadFotos(List<XFile> files, String tipo) async {
+    List<String> urls = [];
+    for (var file in files) {
+      try {
+        final bytes = await file.readAsBytes();
+        final fileName = '${DateTime.now().millisecondsSinceEpoch}_${tipo}_${file.name}';
 
-      if (solucaoPendencia != null && solucaoPendencia.isNotEmpty) {
-        data['solucao_descricao'] = solucaoPendencia;
+        debugPrint("📤 Enviando foto: $fileName");
+
+        final String uploadedPath = await supabase.storage
+            .from('atendimentos')
+            .uploadBinary(fileName, bytes);
+
+        final String publicUrl = supabase.storage
+            .from('atendimentos')
+            .getPublicUrl(uploadedPath);
+
+        urls.add(publicUrl);
+        debugPrint("✅ Foto enviada com sucesso: $publicUrl");
+      } catch (e, stack) {
+        debugPrint("❌ Erro ao subir foto ${file.name}: $e");
+        debugPrint("Stack: $stack");
       }
-      if (fotoPendenciaUrl != null && fotoPendenciaUrl.isNotEmpty) {
-        data['foto_pendencia'] = [fotoPendenciaUrl] as String; // array para compatibilidade
-      }
-
-      await supabase.from('obra_servico').update(data).eq('id', obraServicoId);
-
-      debugPrint("✅ Atendimento atualizado (método antigo) → $status");
-      notifyListeners();
-      return true;
-    } catch (e) {
-      debugPrint("❌ Erro no atualizarAtendimento: $e");
-      return false;
     }
+    return urls;
   }
 
-  // ==================== NOVA: SALVAR PENDÊNCIA (texto + múltiplas fotos) ====================
+  // ==================== SALVAR PENDÊNCIA ====================
   Future<bool> salvarPendencia({
     required String obraServicoId,
     required String pendenciaDescricao,
-    required List<String> fotosUrls, // múltiplas fotos
+    required String tecnicoNome,
+    List<XFile> files = const [],
   }) async {
     try {
+      List<String> urls = await uploadFotos(files, 'pendencia');
+
       await supabase.from('obra_servico').update({
         'status': 'pendente',
         'pendencia_descricao': pendenciaDescricao,
-        'foto_pendencia': fotosUrls.isNotEmpty ? fotosUrls : null,
+        'tecnico_nome': tecnicoNome,
+        'data_atendimento': DateTime.now().toIso8601String(),
+        'foto_pendencia': urls.isNotEmpty ? urls : null,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', obraServicoId);
 
-      debugPrint("✅ Pendência salva com ${fotosUrls.length} fotos");
+      debugPrint("✅ Pendência salva com ${urls.length} fotos");
       notifyListeners();
       return true;
-    } catch (e) {
+    } catch (e, stack) {
       debugPrint("❌ Erro ao salvar pendência: $e");
+      debugPrint("Stack: $stack");
       return false;
     }
   }
 
-  // ==================== NOVA: SALVAR SOLUÇÃO ====================
+  // ==================== SALVAR SOLUÇÃO ====================
   Future<bool> salvarSolucao({
     required String obraServicoId,
     required String solucaoDescricao,
-    required List<String> fotosUrls, // opcional
+    required String tecnicoNome,
+    List<XFile> files = const [],
   }) async {
     try {
+      List<String> urls = await uploadFotos(files, 'solucao');
+
       await supabase.from('obra_servico').update({
         'status': 'concluido',
         'solucao_descricao': solucaoDescricao,
-        'foto_solucao': fotosUrls.isNotEmpty ? fotosUrls : null,
+        'tecnico_nome': tecnicoNome,
+        'data_atendimento': DateTime.now().toIso8601String(),
+        'foto_solucao': urls.isNotEmpty ? urls : null,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', obraServicoId);
 
-      debugPrint("✅ Solução salva com ${fotosUrls.length} fotos");
+      debugPrint("✅ Solução salva com ${urls.length} fotos");
       notifyListeners();
       return true;
-    } catch (e) {
+    } catch (e, stack) {
       debugPrint("❌ Erro ao salvar solução: $e");
+      debugPrint("Stack: $stack");
       return false;
     }
   }
 
-  // ==================== MÉTODO AUXILIAR (opcional) ====================
   Future<bool> atualizarStatusSimples(String obraServicoId, String novoStatus) async {
     try {
       await supabase.from('obra_servico').update({
         'status': novoStatus,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', obraServicoId);
+
+      debugPrint("✅ Status simples atualizado para: $novoStatus");
       notifyListeners();
       return true;
     } catch (e) {

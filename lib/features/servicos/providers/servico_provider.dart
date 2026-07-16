@@ -23,7 +23,7 @@ class ServicoProvider extends ChangeNotifier {
 
       final response = await _supabase
           .from('servico')
-          .select('*, categoria(nome)')
+          .select('*, categoria(nome), pops(arquivo_url, titulo)')
           .eq('ativo', true)
           .order('categoria_id', ascending: true)
           .order('nome', ascending: true);
@@ -55,7 +55,7 @@ class ServicoProvider extends ChangeNotifier {
 
       var query = _supabase
           .from('obra_servico')
-          .select('*, servico(*, categoria(nome))')
+          .select('*, servico(*, categoria(nome), pops(arquivo_url, titulo))')
           .eq('obra_id', obraId);
 
       if (faseId != null && faseId.isNotEmpty) {
@@ -73,7 +73,7 @@ class ServicoProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ==================== SERVIÇOS POR FASE (mantido para compatibilidade) ====================
+  // ==================== SERVIÇOS POR FASE ====================
   List<Map<String, dynamic>> _servicosDaFase = [];
   List<Map<String, dynamic>> get servicosDaFase => _servicosDaFase;
 
@@ -83,7 +83,7 @@ class ServicoProvider extends ChangeNotifier {
 
       final res = await _supabase
           .from('obra_servico')
-          .select('*, servico(*, categoria(nome))')
+          .select('*, servico(*, categoria(nome), pops(arquivo_url, titulo))')
           .eq('obra_id', obraId)
           .eq('fase_id', faseId)
           .order('created_at');
@@ -97,14 +97,14 @@ class ServicoProvider extends ChangeNotifier {
     }
   }
 
-  // ==================== OUTROS MÉTODOS (mantidos) ====================
+  // ==================== OUTROS MÉTODOS ====================
   Future<List<Servico>> buscarPorIds(List<String> ids) async {
     if (ids.isEmpty) return [];
 
     try {
       final response = await _supabase
           .from('servico')
-          .select('*, categoria(nome)')
+          .select('*, categoria(nome), pops(arquivo_url, titulo)')
           .inFilter('id', ids)
           .eq('ativo', true);
 
