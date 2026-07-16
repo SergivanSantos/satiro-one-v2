@@ -1,11 +1,11 @@
 {
-    "name": "ivm_estoque",
-    "short_name": "ivm_estoque",
-    "start_url": ".",
+    "name": "Satiro One",
+    "short_name": "Satiro One",
+    "description": "Sistema de Gestão de Obras, Ordens de Serviço e Chamados",
+    "start_url": "/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#00796b",
+    "theme_color": "#00796b",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

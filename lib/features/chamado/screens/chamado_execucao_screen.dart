@@ -233,7 +233,7 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Execução - ${widget.chamado.id.substring(0, 8)}"),
+        title: Text("Execução - ${widget.chamado.numeroDisplay}"),
         backgroundColor: Colors.teal,
       ),
       body: _isLoading
