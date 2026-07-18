@@ -1,5 +1,6 @@
 // lib/features/obra/screens/tecnico_home_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // ← Adicionado para HapticFeedback
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
@@ -24,6 +25,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   final DateFormat _weekdayFormat = DateFormat('EEE', 'pt_BR');
 
   bool _isLoading = false;
+  int _ultimaQuantidadeChamados = 0;
 
   Future<void> _carregarDados() async {
     if (!mounted) return;
@@ -53,18 +55,51 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
         servicoProvider.carregarServicos(),
       ]);
 
-      // Pré-carrega serviços de todas as obras dos chamados
       final obrasIds = chamadoProvider.chamados.map((c) => c.obraId).toSet();
       for (var obraId in obrasIds) {
         if (obraId.isNotEmpty) {
           await servicoProvider.carregarServicosDaObra(obraId);
         }
       }
+
+      // ==================== DETECÇÃO DE NOVO CHAMADO ====================
+      final quantidadeAtual = chamadoProvider.chamados.length;
+      if (quantidadeAtual > _ultimaQuantidadeChamados && _ultimaQuantidadeChamados > 0) {
+        _notificarNovoChamado();
+      }
+      _ultimaQuantidadeChamados = quantidadeAtual;
+
     } catch (e) {
       debugPrint("❌ Erro ao carregar dados: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // ==================== NOTIFICAÇÃO SIMPLES (Sem pacote extra) ====================
+  void _notificarNovoChamado() {
+    // Feedback háptico (vibração leve)
+    HapticFeedback.heavyImpact();
+    Future.delayed(const Duration(milliseconds: 200), () {
+      HapticFeedback.mediumImpact();
+    });
+
+    // Notificação visual chamativa
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Row(
+          children: [
+            Icon(Icons.notifications_active, color: Colors.white),
+            SizedBox(width: 12),
+            Text("📢 Novo chamado atribuído a você!", style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        backgroundColor: Colors.orange[700],
+        duration: const Duration(seconds: 5),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   Future<void> _selecionarData() async {
