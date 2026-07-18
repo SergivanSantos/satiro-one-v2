@@ -229,6 +229,40 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
     );
   }
 
+  // ==================== VISUALIZAR SOLUÇÃO (RESTAURADO) ====================
+  Future<void> _visualizarSolucao(Map<String, dynamic> item) async {
+    final solucao = item['solucao_descricao']?.toString() ?? 'Nenhuma descrição registrada.';
+    final data = item['data_atendimento'] != null
+        ? _dateFormat.format(DateTime.parse(item['data_atendimento']))
+        : 'Data não registrada';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Solução Aplicada"),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Data: $data", style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              const Text("Descrição:", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(solucao),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Fechar"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -262,13 +296,16 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(observacoes),
-                  Text("Status: ${statusAtual.toUpperCase()}", style: TextStyle(color: jaConcluido ? Colors.green : Colors.orange)),
+                  Text(
+                    "Status: ${statusAtual.toUpperCase()}",
+                    style: TextStyle(color: jaConcluido ? Colors.green : Colors.orange),
+                  ),
                 ],
               ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // ÍCONE POP - CORRIGIDO
+                  // ÍCONE POP
                   if (temPOP)
                     IconButton(
                       icon: const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28),
@@ -286,6 +323,9 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
                   ),
                 ],
               ),
+              onTap: jaConcluido
+                  ? () => _visualizarSolucao(item)   // ← Restaurado
+                  : null,
             ),
           );
         },
