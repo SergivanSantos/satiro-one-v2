@@ -202,7 +202,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text("Cliente: $clienteNome"),
-                          Text("Data: ${_dateFormat.format(chamado.dataAgendada)}"),
+                          //Text("Data: ${_dateFormat.format(chamado.dataAgendada)}"),
                           const SizedBox(height: 8),
                           Row(
                             children: [
@@ -215,9 +215,9 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
                           ),
                         ],
                       ),
-                      trailing: chamado.status == 'concluido'
-                          ? const Icon(Icons.check_circle, color: Colors.green, size: 32)
-                          : const Icon(Icons.access_time, color: Colors.orange, size: 32),
+                      //trailing: chamado.status == 'concluido'
+                         //? const Icon(Icons.check_circle, color: Colors.green, size: 32)
+                         // : const Icon(Icons.access_time, color: Colors.orange, size: 32),
                       onTap: () {
                         Navigator.push(
                           context,

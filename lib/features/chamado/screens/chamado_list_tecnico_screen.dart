@@ -44,7 +44,6 @@ class _ChamadoListTecnicoScreenState extends State<ChamadoListTecnicoScreen> {
     await obraProvider.loadObras();
     await clienteProvider.carregarClientes();
 
-    // Pré-carrega serviços de todas as obras
     final obrasIds = chamadoProvider.chamados.map((c) => c.obraId).toSet();
     for (var obraId in obrasIds) {
       if (obraId.isNotEmpty) {
@@ -97,7 +96,7 @@ class _ChamadoListTecnicoScreenState extends State<ChamadoListTecnicoScreen> {
 
             final clienteNome = cliente?.nome ?? chamado.clienteNome ?? '—';
 
-            // Contagem real de serviços
+            // Contagem de serviços
             int qtdConcluido = 0;
             int qtdPendente = 0;
             int qtdSemAtendimento = 0;
@@ -134,7 +133,6 @@ class _ChamadoListTecnicoScreenState extends State<ChamadoListTecnicoScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text("Cliente: $clienteNome"),
-                    Text("Data: ${_dateFormat.format(chamado.dataAgendada)}"),
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -147,7 +145,20 @@ class _ChamadoListTecnicoScreenState extends State<ChamadoListTecnicoScreen> {
                     ),
                   ],
                 ),
-                trailing: const Icon(Icons.arrow_forward_ios),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Ícone de Localização
+                    IconButton(
+                      icon: const Icon(Icons.location_on, color: Colors.teal, size: 28),
+                      tooltip: "Ver endereço da obra",
+                      onPressed: () {
+                        // Futuro: abrir modal com informações do cliente e endereço
+                        _mostrarInfoObra(context, obra, cliente);
+                      },
+                    ),
+                  ],
+                ),
                 onTap: () {
                   Navigator.push(
                     context,
@@ -164,9 +175,50 @@ class _ChamadoListTecnicoScreenState extends State<ChamadoListTecnicoScreen> {
     );
   }
 
+  void _mostrarInfoObra(BuildContext context, dynamic obra, dynamic cliente) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Informações da Obra", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            if (cliente != null) ...[
+              ListTile(
+                leading: const Icon(Icons.person),
+                title: const Text("Cliente"),
+                subtitle: Text(cliente.nome ?? '—'),
+              ),
+            ],
+            if (obra != null) ...[
+              ListTile(
+                leading: const Icon(Icons.location_on),
+                title: const Text("Endereço"),
+                subtitle: Text(obra.endereco ?? 'Endereço não cadastrado'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.calendar_today),
+                title: const Text("Data Agendada"),
+                subtitle: Text(_dateFormat.format(obra.dataInicio ?? DateTime.now())),
+              ),
+            ],
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildStatusChip(IconData icon, Color color, int count) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: color.withOpacity(0.15),
         borderRadius: BorderRadius.circular(20),
@@ -174,9 +226,9 @@ class _ChamadoListTecnicoScreenState extends State<ChamadoListTecnicoScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(width: 4),
-          Text(count.toString(), style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 6),
+          Text(count.toString(), style: TextStyle(color: color, fontWeight: FontWeight.bold)),
         ],
       ),
     );
