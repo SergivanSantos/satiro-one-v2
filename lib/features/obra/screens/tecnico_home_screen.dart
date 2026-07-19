@@ -75,14 +75,14 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     if (!mounted) return;
     final tecnicoId = context.read<EmployeeProvider>().currentEmployee?.id;
     if (tecnicoId == null) return;
+
     await context.read<ChamadoProvider>().carregarChamadosDoTecnico(tecnicoId, data: _selectedDate);
+    setState(() {}); // Força rebuild da tela
   }
 
   void _notificarNovoChamado() {
-    // Vibração forte (funciona em mobile)
     HapticFeedback.heavyImpact();
 
-    // Som (tenta tocar, mas não quebra se falhar)
     try {
       final player = AudioPlayer();
       player.play(AssetSource('sound/notification.mp3'));
@@ -101,8 +101,6 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
       );
     }
   }
-
-
 
   Future<void> _selecionarData() async {
     final date = await showDatePicker(
@@ -226,14 +224,8 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             child: ListTile(
                               contentPadding: const EdgeInsets.all(16),
-                              leading: const CircleAvatar(
-                                backgroundColor: Colors.teal,
-                                child: Icon(Icons.assignment, color: Colors.white),
-                              ),
-                              title: Text(
-                                obra?.nome ?? chamado.obraNome ?? 'Obra sem nome',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
+                              leading: const CircleAvatar(backgroundColor: Colors.teal, child: Icon(Icons.assignment, color: Colors.white)),
+                              title: Text(obra?.nome ?? chamado.obraNome ?? 'Obra sem nome', style: const TextStyle(fontWeight: FontWeight.bold)),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
