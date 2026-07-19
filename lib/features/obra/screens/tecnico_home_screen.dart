@@ -1,4 +1,5 @@
 // lib/features/obra/screens/tecnico_home_screen.dart
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -78,10 +79,27 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   }
 
   void _notificarNovoChamado() {
-    HapticFeedback.mediumImpact();
+    // Vibração forte
+    HapticFeedback.heavyImpact();
+
+    // Som (precisa adicionar pacote audioplayers)
+    // Se ainda não tiver o pacote, adicione no pubspec.yaml:
+    //audioplayers: ^6.1.0
+
+    try {
+      // Toca som padrão (você pode adicionar um arquivo assets/sound/notification.mp3)
+        AudioPlayer().play(AssetSource('sounds/notification.mp3'));
+    } catch (e) {
+      debugPrint("Som não disponível: $e");
+    }
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("📢 Novo chamado atribuído!"), backgroundColor: Colors.orange),
+        const SnackBar(
+          content: Text("📢 Novo chamado atribuído!"),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 4),
+        ),
       );
     }
   }

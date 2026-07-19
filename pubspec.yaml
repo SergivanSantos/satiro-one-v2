@@ -26,6 +26,7 @@
     http: ^1.6.0
     brasil_fields: ^1.15.0  # ou maior
     flutter_cep2: ^1.0.0  # ← PACOTE ATUALIZADO E PERFEITO PARA 2025
+    audioplayers: ^6.1.0
 
     file_picker: ^3.0.4     # ← Versão recomendada pelo Flutter para resolver o conflito
     share_plus: ^13.2.0
