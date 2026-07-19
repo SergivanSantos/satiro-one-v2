@@ -25,51 +25,16 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   final DateFormat _weekdayFormat = DateFormat('EEE', 'pt_BR');
 
   bool _isLoading = false;
+  int? _tecnicoIdAnterior;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _carregarDados();
-      _configurarRealtime();
-    });
-  }
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final tecnicoId = context.watch<EmployeeProvider>().currentEmployee?.id;
 
-  Future<void> _carregarDados() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
-
-    final employeeProvider = context.read<EmployeeProvider>();
-    final chamadoProvider = context.read<ChamadoProvider>();
-
-    final tecnicoId = employeeProvider.currentEmployee?.id;
-    debugPrint("🔄 Técnico Home - Usuário: ${employeeProvider.currentEmployee?.name ?? 'null'} | ID: $tecnicoId");
-
-    try {
-      if (tecnicoId != null) {
-        await chamadoProvider.carregarChamadosDoTecnico(tecnicoId, data: _selectedDate);
-      }
-    } catch (e) {
-      debugPrint("❌ Erro ao carregar dados: $e");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _configurarRealtime() {
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (!mounted) return;
-
-      final employeeProvider = context.read<EmployeeProvider>();
-      final tecnicoId = employeeProvider.currentEmployee?.id;
-
-      if (tecnicoId == null) {
-        debugPrint("⚠️ tecnicoId ainda null. Tentando novamente...");
-        Future.delayed(const Duration(seconds: 1), _configurarRealtime);
-        return;
-      }
-
-      debugPrint("📡 Configurando Realtime para técnico ID: $tecnicoId");
+    if (tecnicoId != null && tecnicoId != _tecnicoIdAnterior) {
+      _tecnicoIdAnterior = tecnicoId;
+      debugPrint("👤 Técnico carregado! ID: $tecnicoId → Configurando Realtime");
       context.read<ChamadoProvider>().setupRealtimeParaTecnico(
         tecnicoId,
         onNovoChamado: () {
@@ -78,14 +43,35 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
           _carregarDados();
         },
       );
-    });
+    }
+  }
+
+  Future<void> _carregarDados() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    final employeeProvider = context.read<EmployeeProvider>();
+    final chamadoProvider = context.read<ChamadoProvider>();
+    final tecnicoId = employeeProvider.currentEmployee?.id;
+
+    debugPrint("🔄 Carregando dados - Técnico ID: $tecnicoId");
+
+    try {
+      if (tecnicoId != null) {
+        await chamadoProvider.carregarChamadosDoTecnico(tecnicoId, data: _selectedDate);
+      }
+    } catch (e) {
+      debugPrint("❌ Erro ao carregar: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   void _notificarNovoChamado() {
-    HapticFeedback.heavyImpact();
-    Future.delayed(const Duration(milliseconds: 200), () {
-      if (mounted) HapticFeedback.mediumImpact();
-    });
+    // Vibração (não funciona no Web, mas não quebra)
+    try {
+      HapticFeedback.heavyImpact();
+    } catch (_) {}
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -93,11 +79,16 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
           children: [
             Icon(Icons.notifications_active, color: Colors.white, size: 32),
             SizedBox(width: 16),
-            Expanded(child: Text("📢 Novo chamado atribuído a você!", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold))),
+            Expanded(
+              child: Text(
+                "📢 Novo chamado atribuído a você!",
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+            ),
           ],
         ),
         backgroundColor: Colors.orange[800],
-        duration: const Duration(seconds: 7),
+        duration: const Duration(seconds: 8),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
@@ -136,9 +127,9 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   Widget build(BuildContext context) {
     final employeeProvider = context.watch<EmployeeProvider>();
     final chamadoProvider = context.watch<ChamadoProvider>();
-    final obraProvider = context.watch<ObraProvider>();       // ← Corrigido
-    final clienteProvider = context.watch<ClienteProvider>(); // ← Corrigido
-    final servicoProvider = context.watch<ServicoProvider>(); // ← Corrigido
+    final obraProvider = context.watch<ObraProvider>();
+    final clienteProvider = context.watch<ClienteProvider>();
+    final servicoProvider = context.watch<ServicoProvider>();
 
     final tecnicoNome = employeeProvider.currentEmployee?.name?.split(' ').first ?? 'Técnico';
     final chamadosDoDia = chamadoProvider.chamados;
