@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:collection/collection.dart'; // ← Adicione isso no pubspec.yaml se não tiver
 
 import '../../rh/providers/employee_provider.dart';
 import '../../chamado/providers/chamado_provider.dart';
@@ -10,7 +11,6 @@ import '../../chamado/screens/chamado_execucao_screen.dart';
 import '../../obra/providers/obra_provider.dart';
 import '../../client/providers/cliente_provider.dart';
 import '../../servicos/providers/servico_provider.dart';
-import '../../servicos/screens/obra_servico_form_screen.dart';
 
 class TecnicoHomeScreen extends StatefulWidget {
   const TecnicoHomeScreen({super.key});
@@ -25,25 +25,38 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   final DateFormat _weekdayFormat = DateFormat('EEE', 'pt_BR');
 
   bool _isLoading = false;
-  int? _tecnicoIdAnterior;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final tecnicoId = context.watch<EmployeeProvider>().currentEmployee?.id;
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _carregarDados();
+      _configurarRealtime();
+    });
+  }
 
-    if (tecnicoId != null && tecnicoId != _tecnicoIdAnterior) {
-      _tecnicoIdAnterior = tecnicoId;
-      debugPrint("👤 Técnico carregado! ID: $tecnicoId → Configurando Realtime");
-      context.read<ChamadoProvider>().setupRealtimeParaTecnico(
-        tecnicoId,
-        onNovoChamado: () {
-          debugPrint("🔔 REALTIME → Novo chamado detectado!");
-          _notificarNovoChamado();
-          _carregarDados();
-        },
-      );
-    }
+  void _configurarRealtime() {
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
+
+      final employeeProvider = context.read<EmployeeProvider>();
+      final tecnicoId = employeeProvider.currentEmployee?.id;
+
+      if (tecnicoId != null) {
+        debugPrint("👤 Técnico carregado! ID: $tecnicoId → Configurando Realtime");
+        context.read<ChamadoProvider>().setupRealtimeParaTecnico(
+          tecnicoId,
+          onNovoChamado: () {
+            debugPrint("🔔 REALTIME → Novo chamado detectado via callback!");
+            _notificarNovoChamado();
+            _carregarDados();
+          },
+        );
+      } else {
+        debugPrint("⚠️ tecnicoId ainda null. Tentando novamente em 1s...");
+        Future.delayed(const Duration(seconds: 1), _configurarRealtime);
+      }
+    });
   }
 
   Future<void> _carregarDados() async {
@@ -54,23 +67,23 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     final chamadoProvider = context.read<ChamadoProvider>();
     final tecnicoId = employeeProvider.currentEmployee?.id;
 
-    debugPrint("🔄 Carregando dados - Técnico ID: $tecnicoId");
+    debugPrint("🔄 Carregando dados - Técnico ID: $tecnicoId | Data: ${_dateFormat.format(_selectedDate)}");
 
     try {
       if (tecnicoId != null) {
         await chamadoProvider.carregarChamadosDoTecnico(tecnicoId, data: _selectedDate);
       }
     } catch (e) {
-      debugPrint("❌ Erro ao carregar: $e");
+      debugPrint("❌ Erro ao carregar dados: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _notificarNovoChamado() {
-    // Vibração (não funciona no Web, mas não quebra)
     try {
       HapticFeedback.heavyImpact();
+      HapticFeedback.mediumImpact();
     } catch (_) {}
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -118,7 +131,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     try {
       context.read<ChamadoProvider>().disposeRealtime();
     } catch (e) {
-      debugPrint("Aviso dispose: $e");
+      debugPrint("Aviso ao dispose Realtime: $e");
     }
     super.dispose();
   }
@@ -159,7 +172,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
         onRefresh: _carregarDados,
         child: Column(
           children: [
-            // Calendário compacto
+            // Calendário
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               color: Colors.white,

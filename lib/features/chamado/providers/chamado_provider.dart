@@ -13,13 +13,18 @@ class ChamadoProvider extends ChangeNotifier {
   final supabase = Supabase.instance.client;
   StreamSubscription<List<Map<String, dynamic>>>? _realtimeSubscription;
 
+  DateTime? _ultimaDataCarregada; // Para controle interno
+
   // ==================== TÉCNICO ====================
   Future<void> carregarChamadosDoTecnico(int tecnicoId, {DateTime? data}) async {
     isLoading = true;
     notifyListeners();
 
+    final dataParaCarregar = data ?? DateTime.now();
+    _ultimaDataCarregada = dataParaCarregar;
+
     try {
-      debugPrint("🔄 Carregando chamados do técnico ID: $tecnicoId | Data: ${data != null ? DateFormat('yyyy-MM-dd').format(data) : 'Todas'}");
+      debugPrint("🔄 Carregando chamados do técnico ID: $tecnicoId | Data: ${DateFormat('yyyy-MM-dd').format(dataParaCarregar)}");
 
       final res = await supabase
           .from('chamado')
@@ -38,9 +43,10 @@ class ChamadoProvider extends ChangeNotifier {
       }
 
       chamados = lista.map<Chamado>((c) => Chamado.fromMap(c)).toList();
-      debugPrint("✅ ${chamados.length} chamados carregados para o técnico $tecnicoId");
-    } catch (e) {
+      debugPrint("✅ ${chamados.length} chamados carregados para o técnico $tecnicoId na data ${_ultimaDataCarregada != null ? DateFormat('dd/MM').format(_ultimaDataCarregada!) : 'Todas'}");
+    } catch (e, stack) {
       debugPrint("❌ Erro ao carregar chamados do técnico: $e");
+      debugPrint("Stack: $stack");
       chamados = [];
     } finally {
       isLoading = false;
@@ -52,29 +58,32 @@ class ChamadoProvider extends ChangeNotifier {
   void setupRealtimeParaTecnico(int tecnicoId, {required VoidCallback onNovoChamado}) {
     _realtimeSubscription?.cancel();
 
-    debugPrint("📡 Configurando Realtime para técnico ID: $tecnicoId");
+    debugPrint("📡 [REALTIME] Iniciando subscription para técnico ID: $tecnicoId");
 
     _realtimeSubscription = supabase
         .from('chamado')
         .stream(primaryKey: ['id'])
         .eq('tecnico_id', tecnicoId)
-        .order('created_at', ascending: false)
-        .listen((data) {
-      debugPrint("🔔 Realtime: Mudança detectada na tabela chamado! (${data.length} registros)");
+        .listen((List<Map<String, dynamic>> data) async {
+      debugPrint("🔔 [REALTIME] Mudança detectada na tabela 'chamado'! (${data.length} registros afetados)");
 
-      // Recarrega os chamados e notifica a tela
-      carregarChamadosDoTecnico(tecnicoId, data: DateTime.now()).then((_) {
-        onNovoChamado();
-      });
+      // Recarrega usando a última data que o usuário estava visualizando
+      if (_ultimaDataCarregada != null) {
+        await carregarChamadosDoTecnico(tecnicoId, data: _ultimaDataCarregada);
+      } else {
+        await carregarChamadosDoTecnico(tecnicoId);
+      }
+
+      onNovoChamado();
     });
 
-    debugPrint("✅ Realtime configurado com sucesso para técnico $tecnicoId");
+    debugPrint("✅ [REALTIME] Subscription ATIVA para técnico $tecnicoId");
   }
 
   void disposeRealtime() {
     _realtimeSubscription?.cancel();
     _realtimeSubscription = null;
-    debugPrint("🛑 Realtime do ChamadoProvider finalizado");
+    debugPrint("🛑 [REALTIME] Subscription finalizada e cancelada");
   }
 
   // ==================== ADMIN ====================
@@ -123,8 +132,6 @@ class ChamadoProvider extends ChangeNotifier {
       return false;
     }
   }
-
-  // ... (outros métodos de update/excluir mantidos iguais)
 
   Future<bool> atualizarStatusChamado(String chamadoId, String novoStatus) async {
     try {
