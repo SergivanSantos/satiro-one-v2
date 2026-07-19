@@ -77,31 +77,43 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     if (tecnicoId == null) return;
 
     await context.read<ChamadoProvider>().carregarChamadosDoTecnico(tecnicoId, data: _selectedDate);
-    setState(() {}); // Força rebuild da tela
+
+    // Força rebuild da tela
+    if (mounted) {
+      setState(() {});
+      debugPrint("🔄 Forçando rebuild da lista após mudança (desatribuição/exclusão)");
+    }
   }
 
   void _notificarNovoChamado() {
-    // Vibração forte + sequência (melhor sensação)
+    // Vibração mais perceptível
     HapticFeedback.heavyImpact();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      HapticFeedback.heavyImpact();
-    });
+    Future.delayed(const Duration(milliseconds: 120), () => HapticFeedback.heavyImpact());
 
     // Som
     try {
       final player = AudioPlayer();
       player.play(AssetSource('sound/notification.mp3'));
-      debugPrint("🎵 Som de notificação tocado");
+      debugPrint("🎵 Som tocado");
     } catch (e) {
-      debugPrint("🔇 Não foi possível tocar som: $e");
+      debugPrint("🔇 Som não disponível: $e");
     }
 
+    // Snackbar mais visível
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("📢 Novo chamado atribuído!"),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 4),
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.notifications_active, color: Colors.white),
+              SizedBox(width: 12),
+              Text("📢 Novo chamado atribuído!"),
+            ],
+          ),
+          backgroundColor: Colors.orange[700],
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     }
@@ -138,7 +150,6 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     return Consumer<EmployeeProvider>(
       builder: (context, employeeProvider, child) {
         final nome = employeeProvider.currentEmployee?.name ?? 'Carregando...';
-        debugPrint("🔄 [Consumer] Nome final: $nome | ID: ${employeeProvider.currentEmployee?.id}");
 
         return Scaffold(
           backgroundColor: Colors.grey[50],

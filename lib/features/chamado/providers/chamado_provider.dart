@@ -58,7 +58,10 @@ class ChamadoProvider extends ChangeNotifier {
 
   // ==================== REALTIME ====================
   void setupRealtimeParaTecnico(int tecnicoId, {required VoidCallback onNovoChamado}) {
-    if (_realtimeAtivo && _tecnicoIdAtual == tecnicoId) return;
+    if (_realtimeAtivo && _tecnicoIdAtual == tecnicoId) {
+      debugPrint("📡 [REALTIME] Já ativo para técnico $tecnicoId");
+      return;
+    }
 
     _cancelarRealtime();
 
@@ -73,7 +76,7 @@ class ChamadoProvider extends ChangeNotifier {
         .eq('tecnico_id', tecnicoId)
         .listen(
           (payload) async {
-        debugPrint("🔔 [REALTIME] Mudança detectada! (${payload.length} registros) - Recarregando...");
+        debugPrint("🔔 [REALTIME] Mudança detectada! (${payload.length} registros) - Recarregando lista...");
         try {
           if (_ultimaDataCarregada != null) {
             await carregarChamadosDoTecnico(tecnicoId, data: _ultimaDataCarregada);
@@ -82,11 +85,11 @@ class ChamadoProvider extends ChangeNotifier {
           }
           onNovoChamado();
         } catch (e) {
-          debugPrint("❌ Erro no realtime: $e");
+          debugPrint("❌ Erro no realtime callback: $e");
         }
       },
       onError: (error) {
-        debugPrint("❌ Erro na subscription: $error");
+        debugPrint("❌ Erro na subscription Realtime: $error");
         _realtimeAtivo = false;
       },
     );
