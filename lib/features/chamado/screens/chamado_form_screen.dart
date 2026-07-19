@@ -35,6 +35,7 @@ class _ChamadoFormScreenState extends State<ChamadoFormScreen> {
   @override
   void initState() {
     super.initState();
+
     if (widget.chamado != null) {
       final c = widget.chamado!;
       _dataAgendada = c.dataAgendada;
@@ -44,9 +45,30 @@ class _ChamadoFormScreenState extends State<ChamadoFormScreen> {
       _servicosSelecionados = List.from(c.servicosIds);
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ObraProvider>().loadObras();
-      context.read<OrdemServicoProvider>().carregarTodasOrdens();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final employeeProvider = context.read<EmployeeProvider>();
+      final obraProvider = context.read<ObraProvider>();
+      final ordemProvider = context.read<OrdemServicoProvider>();
+
+      await Future.wait([
+        employeeProvider.loadAllEmployees(),
+        obraProvider.loadObras(),
+        ordemProvider.carregarTodasOrdens(),
+      ]);
+
+      if (widget.chamado != null &&
+          _obraIdSelecionada != null &&
+          _ordemServicoIdSelecionada != null) {
+        final ordem = ordemProvider.ordens.firstWhereOrNull(
+              (o) => o.id == _ordemServicoIdSelecionada,
+        );
+        if (ordem != null) {
+          await context.read<ServicoProvider>().carregarServicosDaFase(
+            _obraIdSelecionada!,
+            ordem.faseId,
+          );
+        }
+      }
     });
   }
 
@@ -57,9 +79,37 @@ class _ChamadoFormScreenState extends State<ChamadoFormScreen> {
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 90)),
     );
+
     if (picked != null && picked != _dataAgendada) {
       setState(() => _dataAgendada = picked);
     }
+  }
+
+  void _selecionarTodosServicos() {
+    final servicosDaFase = context.read<ServicoProvider>().servicosDaFase;
+    setState(() {
+      final todosIds = _getServicosNaoConcluidos()
+          .map((item) => (item['servico'] as Map<String, dynamic>?)?['id'] as String? ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+
+      if (_servicosSelecionados.length == todosIds.length) {
+        _servicosSelecionados.clear();
+      } else {
+        _servicosSelecionados = List.from(todosIds);
+      }
+    });
+  }
+
+  // Retorna apenas serviços que NÃO estão concluídos
+  List<Map<String, dynamic>> _getServicosNaoConcluidos() {
+    final servicoProvider = context.read<ServicoProvider>();
+    final todos = servicoProvider.servicosDaFase;
+
+    return todos.where((item) {
+      final status = (item['status'] ?? 'nao_iniciado').toString().toLowerCase();
+      return status != 'concluido';
+    }).toList();
   }
 
   @override
@@ -70,27 +120,35 @@ class _ChamadoFormScreenState extends State<ChamadoFormScreen> {
     final servicoProvider = context.watch<ServicoProvider>();
 
     final tecnicos = employeeProvider.employees
-        .where((e) => e.role?.toLowerCase().contains('tecnico') ?? false)
+        .where((e) =>
+    (e.role?.toLowerCase().contains('tecnico') ?? false) ||
+        (e.role?.toLowerCase().contains('tech') ?? false))
         .toList();
 
     final ordensDaObra = _obraIdSelecionada == null
         ? <OrdemServico>[]
         : ordemProvider.ordens.where((o) => o.obraId == _obraIdSelecionada).toList();
 
+    final bool isEditing = widget.chamado != null;
+    final servicosDisponiveis = _getServicosNaoConcluidos();
+
     return Scaffold(
-      appBar: AppBar(title: Text(widget.chamado != null ? 'Editar Chamado' : 'Novo Chamado')),
+      appBar: AppBar(
+        title: Text(isEditing ? 'Editar Chamado' : 'Novo Chamado'),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
           child: ListView(
             children: [
-              // Obra, Ordem de Serviço, Técnico e Data (mantidos iguais)...
-
+              // Obra
               DropdownButtonFormField<String>(
                 decoration: const InputDecoration(labelText: "Obra *", border: OutlineInputBorder()),
                 value: _obraIdSelecionada,
-                items: obraProvider.obras.map((obra) => DropdownMenuItem(value: obra.id, child: Text(obra.nome))).toList(),
+                items: obraProvider.obras
+                    .map((obra) => DropdownMenuItem(value: obra.id, child: Text(obra.nome)))
+                    .toList(),
                 onChanged: (value) {
                   setState(() {
                     _obraIdSelecionada = value;
@@ -103,19 +161,25 @@ class _ChamadoFormScreenState extends State<ChamadoFormScreen> {
 
               const SizedBox(height: 16),
 
+              // Ordem de Serviço
               DropdownButtonFormField<String>(
                 decoration: const InputDecoration(labelText: "Ordem de Serviço *", border: OutlineInputBorder()),
                 value: _ordemServicoIdSelecionada,
-                items: ordensDaObra.map((ordem) => DropdownMenuItem(value: ordem.id, child: Text(ordem.titulo))).toList(),
+                items: ordensDaObra
+                    .map((ordem) => DropdownMenuItem(value: ordem.id, child: Text(ordem.titulo)))
+                    .toList(),
                 onChanged: (value) async {
                   setState(() {
                     _ordemServicoIdSelecionada = value;
-                    _servicosSelecionados.clear(); // Limpa seleção ao trocar OS
+                    _servicosSelecionados.clear();
                   });
                   if (value != null && _obraIdSelecionada != null) {
                     final ordemSelecionada = ordensDaObra.firstWhereOrNull((o) => o.id == value);
                     if (ordemSelecionada != null) {
-                      await servicoProvider.carregarServicosDaFase(_obraIdSelecionada!, ordemSelecionada.faseId);
+                      await servicoProvider.carregarServicosDaFase(
+                        _obraIdSelecionada!,
+                        ordemSelecionada.faseId,
+                      );
                     }
                   }
                 },
@@ -124,26 +188,53 @@ class _ChamadoFormScreenState extends State<ChamadoFormScreen> {
 
               const SizedBox(height: 16),
 
-              // Técnico e Data (mantidos)...
+              // Técnico
+              DropdownButtonFormField<int>(
+                decoration: const InputDecoration(labelText: "Técnico Responsável *", border: OutlineInputBorder()),
+                value: _tecnicoIdSelecionado,
+                items: tecnicos.isEmpty
+                    ? [const DropdownMenuItem(value: null, child: Text("Nenhum técnico encontrado"))]
+                    : tecnicos.map((t) => DropdownMenuItem(value: t.id, child: Text(t.name ?? 'Sem nome'))).toList(),
+                onChanged: (value) => setState(() => _tecnicoIdSelecionado = value),
+                validator: (v) => v == null ? 'Selecione um técnico' : null,
+              ),
 
-              // ==================== SERVIÇOS ====================
+              const SizedBox(height: 16),
+
+              // Data
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.calendar_today, color: Colors.teal),
+                  title: const Text("Data do Atendimento"),
+                  subtitle: Text(_dateFormat.format(_dataAgendada)),
+                  trailing: const Icon(Icons.edit_calendar),
+                  onTap: _selecionarData,
+                ),
+              ),
+
               const SizedBox(height: 24),
+
+              // Serviços - Apenas não concluídos
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text("Serviços a Atender", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  TextButton(onPressed: _selecionarTodosServicos, child: const Text("Selecionar Todos")),
+                  TextButton(
+                    onPressed: _selecionarTodosServicos,
+                    child: const Text("Selecionar Todos"),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
 
-              if (servicoProvider.servicosDaFase.isEmpty)
-                const Text("Selecione uma Ordem de Serviço para ver os serviços...")
+              if (servicosDisponiveis.isEmpty)
+                const Text("Todos os serviços desta fase já foram concluídos.",
+                    style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold))
               else
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: servicoProvider.servicosDaFase.map((item) {
+                  children: servicosDisponiveis.map((item) {
                     final servico = item['servico'] as Map<String, dynamic>? ?? {};
                     final id = servico['id'] as String? ?? '';
                     final nome = servico['nome'] as String? ?? 'Serviço';
@@ -155,9 +246,7 @@ class _ChamadoFormScreenState extends State<ChamadoFormScreen> {
                       onSelected: (selected) {
                         setState(() {
                           if (selected) {
-                            if (!_servicosSelecionados.contains(id)) {
-                              _servicosSelecionados.add(id);
-                            }
+                            if (!_servicosSelecionados.contains(id)) _servicosSelecionados.add(id);
                           } else {
                             _servicosSelecionados.remove(id);
                           }
@@ -187,7 +276,7 @@ class _ChamadoFormScreenState extends State<ChamadoFormScreen> {
                       obraId: _obraIdSelecionada ?? '',
                       dataAgendada: _dataAgendada,
                       tecnicoId: _tecnicoIdSelecionado,
-                      servicosIds: List.from(_servicosSelecionados), // ← Aqui está correto
+                      servicosIds: List.from(_servicosSelecionados),
                     );
 
                     final provider = context.read<ChamadoProvider>();
@@ -203,8 +292,10 @@ class _ChamadoFormScreenState extends State<ChamadoFormScreen> {
                       Navigator.pop(context, true);
                     }
                   },
-                  child: Text(widget.chamado != null ? "ATUALIZAR CHAMADO" : "CRIAR CHAMADO",
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    isEditing ? "ATUALIZAR CHAMADO" : "CRIAR CHAMADO",
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],
@@ -212,21 +303,5 @@ class _ChamadoFormScreenState extends State<ChamadoFormScreen> {
         ),
       ),
     );
-  }
-
-  void _selecionarTodosServicos() {
-    final servicosDaFase = context.read<ServicoProvider>().servicosDaFase;
-    setState(() {
-      final todosIds = servicosDaFase
-          .map((item) => (item['servico'] as Map<String, dynamic>?)?['id'] as String? ?? '')
-          .where((id) => id.isNotEmpty)
-          .toList();
-
-      if (_servicosSelecionados.length == todosIds.length) {
-        _servicosSelecionados.clear();
-      } else {
-        _servicosSelecionados = List.from(todosIds);
-      }
-    });
   }
 }
