@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../servicos/screens/obra_servico_form_screen.dart';
 import '../models/employee.dart';
 
 class EmployeeProvider with ChangeNotifier {
@@ -10,17 +11,17 @@ class EmployeeProvider with ChangeNotifier {
   Employee? _currentEmployee;
   bool _isLoading = false;
   String? _errorMessage;
-
   bool _isLoggingOut = false;
 
-  StreamSubscription<List<Map<String, dynamic>>>? _subscription;
+  StreamSubscription? _subscription;
+  StreamSubscription? _authSubscription;
 
   EmployeeProvider() {
     print('EmployeeProvider: Instância criada');
-    Future.delayed(const Duration(milliseconds: 200), () {
-      _setupRealtimeStream();
-      loadCurrentEmployee();
-    });
+    _setupAuthListener();
+    _setupRealtimeStream();
+    // Tenta carregar imediatamente e com retry
+    Future.delayed(const Duration(milliseconds: 300), _loadCurrentEmployeeWithRetry);
   }
 
   List<Employee> get employees => _employees;
@@ -35,6 +36,19 @@ class EmployeeProvider with ChangeNotifier {
 
   final supabase = Supabase.instance.client;
 
+  void _setupAuthListener() {
+    _authSubscription?.cancel();
+    _authSubscription = supabase.auth.onAuthStateChange.listen((data) {
+      print('🔄 Auth state changed: ${data.event}');
+      if (data.event == AuthChangeEvent.signedIn || data.event == AuthChangeEvent.tokenRefreshed) {
+        _loadCurrentEmployeeWithRetry();
+      } else if (data.event == AuthChangeEvent.signedOut) {
+        _currentEmployee = null;
+        notifyListeners();
+      }
+    });
+  }
+
   void _setupRealtimeStream() {
     _subscription?.cancel();
     _subscription = supabase
@@ -43,12 +57,34 @@ class EmployeeProvider with ChangeNotifier {
         .order('name')
         .listen((data) {
       _employees = data.map((map) => Employee.fromMap(map)).toList();
+      // Atualiza currentEmployee se ele estiver na lista
+      if (_currentEmployee != null) {
+        final updated = _employees.firstWhereOrNull((e) => e.id == _currentEmployee!.id);
+        if (updated != null) {
+          _currentEmployee = updated;
+        }
+      }
       notifyListeners();
     });
   }
 
-  Future<void> loadCurrentEmployee() async {
+  Future<void> _loadCurrentEmployeeWithRetry({int attempts = 0}) async {
+    if (attempts > 5) {
+      print('⚠️ Máximo de tentativas para carregar currentEmployee atingido');
+      return;
+    }
+
     await _loadCurrentEmployee();
+
+    if (_currentEmployee == null) {
+      print('⚠️ currentEmployee ainda null. Tentando novamente em ${500 + attempts * 300}ms...');
+      Future.delayed(Duration(milliseconds: 500 + attempts * 300), () {
+        _loadCurrentEmployeeWithRetry(attempts: attempts + 1);
+      });
+    } else {
+      print('✅ currentEmployee carregado com sucesso: ${_currentEmployee!.name} (ID: ${_currentEmployee!.id})');
+      notifyListeners();
+    }
   }
 
   Future<void> _loadCurrentEmployee() async {
@@ -74,7 +110,11 @@ class EmployeeProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // ==================== LOGIN ====================
+  Future<void> loadCurrentEmployee() async {
+    await _loadCurrentEmployeeWithRetry();
+  }
+
+  // ==================== LOGIN / LOGOUT / OUTROS MÉTODOS ====================
   Future<bool> login(String email, String password) async {
     try {
       _isLoading = true;
@@ -86,7 +126,7 @@ class EmployeeProvider with ChangeNotifier {
       );
 
       if (response.user != null) {
-        await loadCurrentEmployee();
+        await _loadCurrentEmployeeWithRetry();
         return true;
       }
       return false;
@@ -99,7 +139,6 @@ class EmployeeProvider with ChangeNotifier {
     }
   }
 
-  // ==================== LOGOUT ====================
   Future<void> logout() async {
     if (_isLoggingOut) return;
     _isLoggingOut = true;
@@ -206,6 +245,7 @@ class EmployeeProvider with ChangeNotifier {
   @override
   void dispose() {
     _subscription?.cancel();
+    _authSubscription?.cancel();
     super.dispose();
   }
 }
