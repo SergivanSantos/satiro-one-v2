@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'dart:async'; // ← Adicionado
 
 import '../../rh/providers/employee_provider.dart';
 import '../../chamado/providers/chamado_provider.dart';
@@ -26,15 +25,19 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   final DateFormat _weekdayFormat = DateFormat('EEE', 'pt_BR');
 
   bool _isLoading = false;
-  int _ultimaQuantidadeChamados = 0;
-  Timer? _refreshTimer; // ← Timer para atualização automática
 
-  Future<void> _carregarDados({bool isAutoRefresh = false}) async {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _carregarDados();
+      _setupRealtimeListener();
+    });
+  }
+
+  Future<void> _carregarDados() async {
     if (!mounted) return;
-
-    if (!isAutoRefresh) {
-      setState(() => _isLoading = true);
-    }
+    setState(() => _isLoading = true);
 
     final employeeProvider = context.read<EmployeeProvider>();
     final chamadoProvider = context.read<ChamadoProvider>();
@@ -42,8 +45,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     final clienteProvider = context.read<ClienteProvider>();
     final servicoProvider = context.read<ServicoProvider>();
 
-    final current = employeeProvider.currentEmployee;
-    final tecnicoId = current?.id;
+    final tecnicoId = employeeProvider.currentEmployee?.id;
 
     try {
       if (tecnicoId != null) {
@@ -62,21 +64,25 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
           await servicoProvider.carregarServicosDaObra(obraId);
         }
       }
-
-      // ==================== DETECÇÃO DE NOVO CHAMADO ====================
-      final quantidadeAtual = chamadoProvider.chamados.length;
-      if (quantidadeAtual > _ultimaQuantidadeChamados) {
-        _notificarNovoChamado();
-      }
-      _ultimaQuantidadeChamados = quantidadeAtual;
-
     } catch (e) {
       debugPrint("❌ Erro ao carregar dados: $e");
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _setupRealtimeListener() {
+    final chamadoProvider = context.read<ChamadoProvider>();
+    final tecnicoId = context.read<EmployeeProvider>().currentEmployee?.id;
+
+    if (tecnicoId == null) return;
+
+    chamadoProvider.setupRealtimeParaTecnico(tecnicoId, onNovoChamado: () {
+      if (mounted) {
+        _notificarNovoChamado();
+        _carregarDados(); // Atualiza a lista automaticamente
+      }
+    });
   }
 
   void _notificarNovoChamado() {
@@ -89,7 +95,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
       SnackBar(
         content: const Row(
           children: [
-            Icon(Icons.notifications_active, color: Colors.white),
+            Icon(Icons.notifications_active, color: Colors.white, size: 28),
             SizedBox(width: 12),
             Text("📢 Novo chamado atribuído a você!", style: TextStyle(fontSize: 16)),
           ],
@@ -100,16 +106,6 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
-  }
-
-  // Timer de atualização automática
-  void _startAutoRefresh() {
-    _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      if (mounted) {
-        _carregarDados(isAutoRefresh: true);
-      }
-    });
   }
 
   Future<void> _selecionarData() async {
@@ -131,17 +127,9 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _carregarDados();
-      _startAutoRefresh(); // ← Inicia refresh automático
-    });
-  }
-
-  @override
   void dispose() {
-    _refreshTimer?.cancel();
+    final chamadoProvider = context.read<ChamadoProvider>();
+    chamadoProvider.disposeRealtime();
     super.dispose();
   }
 
@@ -153,8 +141,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     final clienteProvider = context.watch<ClienteProvider>();
     final servicoProvider = context.watch<ServicoProvider>();
 
-    final current = employeeProvider.currentEmployee;
-    final tecnicoNome = current?.name?.split(' ').first ?? 'Técnico';
+    final tecnicoNome = employeeProvider.currentEmployee?.name?.split(' ').first ?? 'Técnico';
     final chamadosDoDia = chamadoProvider.chamados;
 
     return Scaffold(
@@ -168,7 +155,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
           ],
         ),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: () => _carregarDados()),
+          IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _carregarDados),
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
             onPressed: () async {
@@ -179,10 +166,10 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () => _carregarDados(),
+        onRefresh: _carregarDados,
         child: Column(
           children: [
-            // Calendário compacto (mantido igual)
+            // Calendário compacto
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               color: Colors.white,
@@ -224,7 +211,6 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
                 padding: const EdgeInsets.all(12),
                 itemCount: chamadosDoDia.length,
                 itemBuilder: (context, index) {
-                  // ... seu itemBuilder original (mantido igual)
                   final chamado = chamadosDoDia[index];
                   final obra = obraProvider.obras.firstWhereOrNull((o) => o.id == chamado.obraId);
                   final cliente = clienteProvider.clientes.firstWhereOrNull((c) => c.id == obra?.clienteId);

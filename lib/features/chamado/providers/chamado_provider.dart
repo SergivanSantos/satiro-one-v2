@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
 
 import '../models/chamado.dart';
 
@@ -10,6 +11,7 @@ class ChamadoProvider extends ChangeNotifier {
   bool isLoading = false;
 
   final supabase = Supabase.instance.client;
+  StreamSubscription<List<Map<String, dynamic>>>? _realtimeSubscription;
 
   // ==================== TÉCNICO ====================
   Future<void> carregarChamadosDoTecnico(int tecnicoId, {DateTime? data}) async {
@@ -17,6 +19,8 @@ class ChamadoProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      debugPrint("🔄 Carregando chamados do técnico ID: $tecnicoId | Data: ${data != null ? DateFormat('yyyy-MM-dd').format(data) : 'Todas'}");
+
       final res = await supabase
           .from('chamado')
           .select('*, obra:obra_id(nome), tecnico:tecnico_id(name)')
@@ -34,14 +38,43 @@ class ChamadoProvider extends ChangeNotifier {
       }
 
       chamados = lista.map<Chamado>((c) => Chamado.fromMap(c)).toList();
-      debugPrint("✅ ${chamados.length} chamados do técnico $tecnicoId");
+      debugPrint("✅ ${chamados.length} chamados carregados para o técnico $tecnicoId");
     } catch (e) {
-      debugPrint("❌ Erro técnico: $e");
+      debugPrint("❌ Erro ao carregar chamados do técnico: $e");
       chamados = [];
     } finally {
       isLoading = false;
       notifyListeners();
     }
+  }
+
+  // ==================== REALTIME PARA TÉCNICO ====================
+  void setupRealtimeParaTecnico(int tecnicoId, {required VoidCallback onNovoChamado}) {
+    _realtimeSubscription?.cancel();
+
+    debugPrint("📡 Configurando Realtime para técnico ID: $tecnicoId");
+
+    _realtimeSubscription = supabase
+        .from('chamado')
+        .stream(primaryKey: ['id'])
+        .eq('tecnico_id', tecnicoId)
+        .order('created_at', ascending: false)
+        .listen((data) {
+      debugPrint("🔔 Realtime: Mudança detectada na tabela chamado! (${data.length} registros)");
+
+      // Recarrega os chamados e notifica a tela
+      carregarChamadosDoTecnico(tecnicoId, data: DateTime.now()).then((_) {
+        onNovoChamado();
+      });
+    });
+
+    debugPrint("✅ Realtime configurado com sucesso para técnico $tecnicoId");
+  }
+
+  void disposeRealtime() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
+    debugPrint("🛑 Realtime do ChamadoProvider finalizado");
   }
 
   // ==================== ADMIN ====================
@@ -56,7 +89,7 @@ class ChamadoProvider extends ChangeNotifier {
           .order('data_agendada', ascending: true);
 
       chamados = (res as List<dynamic>).map<Chamado>((c) => Chamado.fromMap(c)).toList();
-      debugPrint("✅ ${chamados.length} chamados totais (Admin)");
+      debugPrint("✅ ${chamados.length} chamados totais carregados (Admin)");
     } catch (e) {
       debugPrint("❌ Erro ao carregar todos chamados: $e");
       chamados = [];
@@ -69,11 +102,13 @@ class ChamadoProvider extends ChangeNotifier {
   // ==================== MUTAÇÕES ====================
   Future<bool> criarChamado(Chamado chamado) async {
     try {
+      debugPrint("📝 Criando novo chamado para técnico: ${chamado.tecnicoId}");
       await supabase.from('chamado').insert(chamado.toMap());
+      debugPrint("✅ Chamado criado com sucesso!");
       await carregarTodosChamados();
       return true;
     } catch (e) {
-      debugPrint("❌ Erro criar: $e");
+      debugPrint("❌ Erro ao criar chamado: $e");
       return false;
     }
   }
@@ -84,10 +119,12 @@ class ChamadoProvider extends ChangeNotifier {
       await carregarTodosChamados();
       return true;
     } catch (e) {
-      debugPrint("❌ Erro atualizar: $e");
+      debugPrint("❌ Erro ao atualizar chamado: $e");
       return false;
     }
   }
+
+  // ... (outros métodos de update/excluir mantidos iguais)
 
   Future<bool> atualizarStatusChamado(String chamadoId, String novoStatus) async {
     try {
@@ -105,6 +142,7 @@ class ChamadoProvider extends ChangeNotifier {
     try {
       await supabase.from('chamado').update({'tecnico_id': novoTecnicoId}).eq('id', chamadoId);
       await carregarTodosChamados();
+      debugPrint("✅ Técnico atualizado para ID: $novoTecnicoId");
       return true;
     } catch (e) {
       debugPrint("❌ Erro ao atualizar técnico: $e");
@@ -123,8 +161,9 @@ class ChamadoProvider extends ChangeNotifier {
     }
   }
 
-  // Recarregar manual
-  Future<void> recarregar() async {
-    await carregarTodosChamados();
+  @override
+  void dispose() {
+    disposeRealtime();
+    super.dispose();
   }
 }
