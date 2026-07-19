@@ -81,8 +81,13 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   }
 
   void _notificarNovoChamado() {
+    // Vibração forte + sequência (melhor sensação)
     HapticFeedback.heavyImpact();
+    Future.delayed(const Duration(milliseconds: 100), () {
+      HapticFeedback.heavyImpact();
+    });
 
+    // Som
     try {
       final player = AudioPlayer();
       player.play(AssetSource('sound/notification.mp3'));
