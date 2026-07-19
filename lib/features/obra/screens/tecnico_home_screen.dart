@@ -25,22 +25,14 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   final DateFormat _weekdayFormat = DateFormat('EEE', 'pt_BR');
 
   bool _isLoading = false;
-  bool _realtimeConfigurado = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _carregarTudo();
+      _carregarDados();
+      _configurarRealtimeComDelay();
     });
-  }
-
-  Future<void> _carregarTudo() async {
-    await _carregarDados();
-
-    // Tenta configurar Realtime várias vezes até conseguir o ID
-    Future.delayed(const Duration(milliseconds: 600), _tentarConfigurarRealtime);
-    Future.delayed(const Duration(milliseconds: 1500), _tentarConfigurarRealtime);
   }
 
   Future<void> _carregarDados() async {
@@ -51,8 +43,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     final chamadoProvider = context.read<ChamadoProvider>();
 
     final tecnicoId = employeeProvider.currentEmployee?.id;
-
-    debugPrint("🔄 Técnico Home - Usuário: ${employeeProvider.currentEmployee?.name} | ID: $tecnicoId");
+    debugPrint("🔄 Técnico Home - Usuário: ${employeeProvider.currentEmployee?.name ?? 'null'} | ID: $tecnicoId");
 
     try {
       if (tecnicoId != null) {
@@ -65,34 +56,34 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     }
   }
 
-  void _tentarConfigurarRealtime() {
-    if (_realtimeConfigurado) return;
+  void _configurarRealtimeComDelay() {
+    // Espera o EmployeeProvider carregar o usuário
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (!mounted) return;
+      final tecnicoId = context.read<EmployeeProvider>().currentEmployee?.id;
 
-    final employeeProvider = context.read<EmployeeProvider>();
-    final chamadoProvider = context.read<ChamadoProvider>();
-    final tecnicoId = employeeProvider.currentEmployee?.id;
+      if (tecnicoId == null) {
+        debugPrint("⚠️ tecnicoId ainda é null. Tentando novamente em 1s...");
+        Future.delayed(const Duration(seconds: 1), _configurarRealtimeComDelay);
+        return;
+      }
 
-    if (tecnicoId == null) {
-      debugPrint("⚠️ Ainda não tem tecnicoId, tentando novamente em breve...");
-      return;
-    }
-
-    debugPrint("📡 ✅ Configurando Realtime para técnico ID: $tecnicoId");
-
-    chamadoProvider.setupRealtimeParaTecnico(
-      tecnicoId,
-      onNovoChamado: () {
-        debugPrint("🔔 REALTIME → Novo chamado detectado!");
-        _notificarNovoChamado();
-        _carregarDados();
-      },
-    );
-
-    _realtimeConfigurado = true;
+      debugPrint("📡 Configurando Realtime para técnico ID: $tecnicoId");
+      context.read<ChamadoProvider>().setupRealtimeParaTecnico(
+        tecnicoId,
+        onNovoChamado: () {
+          if (mounted) {
+            debugPrint("🔔 REALTIME → Novo chamado detectado!");
+            _notificarNovoChamado();
+            _carregarDados();
+          }
+        },
+      );
+    });
   }
 
   void _notificarNovoChamado() {
-    // Vibração (funciona melhor em mobile)
+    // Vibração
     HapticFeedback.heavyImpact();
     Future.delayed(const Duration(milliseconds: 200), () {
       if (mounted) HapticFeedback.mediumImpact();
@@ -107,8 +98,8 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
             SizedBox(width: 16),
             Expanded(
               child: Text(
-                "📢 Novo chamado atribuído a você!\nToque para ver.",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                "📢 Novo chamado atribuído a você!",
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
               ),
             ),
           ],
@@ -117,11 +108,6 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
         duration: const Duration(seconds: 7),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        action: SnackBarAction(
-          label: "VER",
-          textColor: Colors.white,
-          onPressed: () {}, // Pode melhorar depois
-        ),
       ),
     );
   }
@@ -146,7 +132,12 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
 
   @override
   void dispose() {
-    context.read<ChamadoProvider>().disposeRealtime();
+    // Evita erro de context em dispose
+    try {
+      context.read<ChamadoProvider>().disposeRealtime();
+    } catch (e) {
+      debugPrint("Aviso ao dispose Realtime: $e");
+    }
     super.dispose();
   }
 
