@@ -7,10 +7,9 @@ import 'package:provider/provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../providers/auth_provider.dart';                    // Novo
 import '../../rh/providers/employee_provider.dart';
 import '../../obra/screens/tecnico_home_screen.dart';
-import '../../home/home_screen.dart';                       // Nova Home
+import '../../home/home_screen.dart'; // ou sua tela principal
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -46,38 +45,31 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      final employeeProvider = Provider.of<EmployeeProvider>(context, listen: false);
+      final employeeProvider = context.read<EmployeeProvider>();
+
       final success = await employeeProvider.login(
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
 
       if (!success) {
-        setState(() => _error = 'E-mail ou senha incorretos');
+        setState(() => _error = 'E-mail ou senha incorretos.');
         return;
       }
 
-      // Salvar sessão
+      // Salvar sessão (opcional, mas útil)
       final session = Supabase.instance.client.auth.currentSession;
       if (session != null) {
         final storage = const FlutterSecureStorage();
-        await storage.write(key: 'supabase_session_json', value: jsonEncode(session.toJson()));
+        await storage.write(
+          key: 'supabase_session_json',
+          value: jsonEncode(session.toJson()),
+        );
       }
 
-      // Redirecionamento
+      // Redirecionamento (AuthWrapper vai decidir a tela certa)
       if (mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final isAdminOrManager = employeeProvider.isAdmin || employeeProvider.isGerente || employeeProvider.isRh;
-
-          if (isAdminOrManager) {
-            Navigator.pushReplacementNamed(context, '/');
-          } else {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const TecnicoHomeScreen()),
-            );
-          }
-        });
+        Navigator.pushReplacementNamed(context, '/'); // Vai para AuthWrapper
       }
     } catch (e) {
       if (mounted) {

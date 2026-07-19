@@ -11,9 +11,12 @@ class ChamadoProvider extends ChangeNotifier {
   bool isLoading = false;
 
   final supabase = Supabase.instance.client;
-  StreamSubscription<List<Map<String, dynamic>>>? _realtimeSubscription;
 
-  DateTime? _ultimaDataCarregada; // Para controle interno
+  StreamSubscription<List<Map<String, dynamic>>>? _realtimeSubscription;
+  int? _tecnicoIdAtual;
+  bool _realtimeAtivo = false;
+
+  DateTime? _ultimaDataCarregada;
 
   // ==================== TÉCNICO ====================
   Future<void> carregarChamadosDoTecnico(int tecnicoId, {DateTime? data}) async {
@@ -43,10 +46,9 @@ class ChamadoProvider extends ChangeNotifier {
       }
 
       chamados = lista.map<Chamado>((c) => Chamado.fromMap(c)).toList();
-      debugPrint("✅ ${chamados.length} chamados carregados para o técnico $tecnicoId na data ${_ultimaDataCarregada != null ? DateFormat('dd/MM').format(_ultimaDataCarregada!) : 'Todas'}");
-    } catch (e, stack) {
-      debugPrint("❌ Erro ao carregar chamados do técnico: $e");
-      debugPrint("Stack: $stack");
+      debugPrint("✅ ${chamados.length} chamados carregados para o técnico");
+    } catch (e) {
+      debugPrint("❌ Erro ao carregar chamados: $e");
       chamados = [];
     } finally {
       isLoading = false;
@@ -54,9 +56,17 @@ class ChamadoProvider extends ChangeNotifier {
     }
   }
 
-  // ==================== REALTIME PARA TÉCNICO ====================
+  // ==================== REALTIME ====================
   void setupRealtimeParaTecnico(int tecnicoId, {required VoidCallback onNovoChamado}) {
-    _realtimeSubscription?.cancel();
+    if (_realtimeAtivo && _tecnicoIdAtual == tecnicoId) {
+      debugPrint("📡 [REALTIME] Já ativo para técnico $tecnicoId");
+      return;
+    }
+
+    _cancelarRealtime();
+
+    _tecnicoIdAtual = tecnicoId;
+    _realtimeAtivo = true;
 
     debugPrint("📡 [REALTIME] Iniciando subscription para técnico ID: $tecnicoId");
 
@@ -64,26 +74,42 @@ class ChamadoProvider extends ChangeNotifier {
         .from('chamado')
         .stream(primaryKey: ['id'])
         .eq('tecnico_id', tecnicoId)
-        .listen((List<Map<String, dynamic>> data) async {
-      debugPrint("🔔 [REALTIME] Mudança detectada na tabela 'chamado'! (${data.length} registros afetados)");
+        .listen(
+          (payload) async {
+        debugPrint("🔔 [REALTIME] Mudança detectada! (${payload.length} registros) - Recarregando lista");
+        try {
+          if (_ultimaDataCarregada != null) {
+            await carregarChamadosDoTecnico(tecnicoId, data: _ultimaDataCarregada);
+          } else {
+            await carregarChamadosDoTecnico(tecnicoId);
+          }
+          onNovoChamado();
+        } catch (e) {
+          debugPrint("❌ Erro no realtime callback: $e");
+        }
+      },
+      onError: (error) {
+        debugPrint("❌ Erro na subscription Realtime: $error");
+        _realtimeAtivo = false;
+      },
+    );
 
-      // Recarrega usando a última data que o usuário estava visualizando
-      if (_ultimaDataCarregada != null) {
-        await carregarChamadosDoTecnico(tecnicoId, data: _ultimaDataCarregada);
-      } else {
-        await carregarChamadosDoTecnico(tecnicoId);
-      }
+    debugPrint("✅ [REALTIME] Subscription ATIVA");
+  }
 
-      onNovoChamado();
-    });
-
-    debugPrint("✅ [REALTIME] Subscription ATIVA para técnico $tecnicoId");
+  void _cancelarRealtime() {
+    _realtimeSubscription?.cancel();
+    _realtimeSubscription = null;
+    _realtimeAtivo = false;
   }
 
   void disposeRealtime() {
-    _realtimeSubscription?.cancel();
-    _realtimeSubscription = null;
-    debugPrint("🛑 [REALTIME] Subscription finalizada e cancelada");
+    _cancelarRealtime();
+    _tecnicoIdAtual = null;
+  }
+
+  bool jaTemSubscriptionAtiva(int tecnicoId) {
+    return _realtimeAtivo && _tecnicoIdAtual == tecnicoId;
   }
 
   // ==================== ADMIN ====================
@@ -98,7 +124,7 @@ class ChamadoProvider extends ChangeNotifier {
           .order('data_agendada', ascending: true);
 
       chamados = (res as List<dynamic>).map<Chamado>((c) => Chamado.fromMap(c)).toList();
-      debugPrint("✅ ${chamados.length} chamados totais carregados (Admin)");
+      debugPrint("✅ ${chamados.length} chamados totais carregados");
     } catch (e) {
       debugPrint("❌ Erro ao carregar todos chamados: $e");
       chamados = [];
@@ -111,9 +137,8 @@ class ChamadoProvider extends ChangeNotifier {
   // ==================== MUTAÇÕES ====================
   Future<bool> criarChamado(Chamado chamado) async {
     try {
-      debugPrint("📝 Criando novo chamado para técnico: ${chamado.tecnicoId}");
       await supabase.from('chamado').insert(chamado.toMap());
-      debugPrint("✅ Chamado criado com sucesso!");
+      debugPrint("✅ Chamado criado!");
       await carregarTodosChamados();
       return true;
     } catch (e) {
@@ -124,7 +149,8 @@ class ChamadoProvider extends ChangeNotifier {
 
   Future<bool> atualizarChamado(Chamado chamado) async {
     try {
-      await supabase.from('chamado').update(chamado.toMap()).eq('id', chamado.id);
+      await supabase.from('chamado').update(chamado.toMap()).eq('id', chamado.id!);
+      debugPrint("✅ Chamado atualizado!");
       await carregarTodosChamados();
       return true;
     } catch (e) {
@@ -136,8 +162,8 @@ class ChamadoProvider extends ChangeNotifier {
   Future<bool> atualizarStatusChamado(String chamadoId, String novoStatus) async {
     try {
       await supabase.from('chamado').update({'status': novoStatus}).eq('id', chamadoId);
+      debugPrint("✅ Status atualizado!");
       await carregarTodosChamados();
-      debugPrint("✅ Status atualizado para $novoStatus");
       return true;
     } catch (e) {
       debugPrint("❌ Erro ao atualizar status: $e");
@@ -148,8 +174,8 @@ class ChamadoProvider extends ChangeNotifier {
   Future<bool> atualizarTecnicoChamado(String chamadoId, int? novoTecnicoId) async {
     try {
       await supabase.from('chamado').update({'tecnico_id': novoTecnicoId}).eq('id', chamadoId);
+      debugPrint("✅ Técnico atualizado!");
       await carregarTodosChamados();
-      debugPrint("✅ Técnico atualizado para ID: $novoTecnicoId");
       return true;
     } catch (e) {
       debugPrint("❌ Erro ao atualizar técnico: $e");
@@ -160,6 +186,7 @@ class ChamadoProvider extends ChangeNotifier {
   Future<bool> excluirChamado(String chamadoId) async {
     try {
       await supabase.from('chamado').delete().eq('id', chamadoId);
+      debugPrint("🗑️ Chamado excluído com sucesso!");
       await carregarTodosChamados();
       return true;
     } catch (e) {

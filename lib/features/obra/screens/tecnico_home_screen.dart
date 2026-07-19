@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:collection/collection.dart'; // ← Adicione isso no pubspec.yaml se não tiver
+import 'package:collection/collection.dart';
 
 import '../../rh/providers/employee_provider.dart';
 import '../../chamado/providers/chamado_provider.dart';
@@ -24,88 +24,66 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   final DateFormat _dateFormat = DateFormat('dd/MM/yyyy');
   final DateFormat _weekdayFormat = DateFormat('EEE', 'pt_BR');
 
-  bool _isLoading = false;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _carregarDados();
-      _configurarRealtime();
-    });
+    _carregarTudo();
   }
 
-  void _configurarRealtime() {
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (!mounted) return;
-
-      final employeeProvider = context.read<EmployeeProvider>();
-      final tecnicoId = employeeProvider.currentEmployee?.id;
-
-      if (tecnicoId != null) {
-        debugPrint("👤 Técnico carregado! ID: $tecnicoId → Configurando Realtime");
-        context.read<ChamadoProvider>().setupRealtimeParaTecnico(
-          tecnicoId,
-          onNovoChamado: () {
-            debugPrint("🔔 REALTIME → Novo chamado detectado via callback!");
-            _notificarNovoChamado();
-            _carregarDados();
-          },
-        );
-      } else {
-        debugPrint("⚠️ tecnicoId ainda null. Tentando novamente em 1s...");
-        Future.delayed(const Duration(seconds: 1), _configurarRealtime);
-      }
-    });
-  }
-
-  Future<void> _carregarDados() async {
+  Future<void> _carregarTudo() async {
     if (!mounted) return;
     setState(() => _isLoading = true);
 
     final employeeProvider = context.read<EmployeeProvider>();
     final chamadoProvider = context.read<ChamadoProvider>();
-    final tecnicoId = employeeProvider.currentEmployee?.id;
-
-    debugPrint("🔄 Carregando dados - Técnico ID: $tecnicoId | Data: ${_dateFormat.format(_selectedDate)}");
 
     try {
-      if (tecnicoId != null) {
-        await chamadoProvider.carregarChamadosDoTecnico(tecnicoId, data: _selectedDate);
+      await employeeProvider.loadCurrentEmployee();
+
+      final tecnicoId = employeeProvider.currentEmployee?.id;
+      if (tecnicoId == null) {
+        Future.delayed(const Duration(milliseconds: 300), _carregarTudo);
+        return;
       }
+
+      if (!chamadoProvider.jaTemSubscriptionAtiva(tecnicoId)) {
+        chamadoProvider.setupRealtimeParaTecnico(
+          tecnicoId,
+          onNovoChamado: () {
+            _notificarNovoChamado();
+            _recarregarApenasChamados();
+          },
+        );
+      }
+
+      await Future.wait([
+        chamadoProvider.carregarChamadosDoTecnico(tecnicoId, data: _selectedDate),
+        context.read<ObraProvider>().loadObras(),
+        context.read<ClienteProvider>().carregarClientes(),
+      ]);
     } catch (e) {
-      debugPrint("❌ Erro ao carregar dados: $e");
+      debugPrint("❌ Erro: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _notificarNovoChamado() {
-    try {
-      HapticFeedback.heavyImpact();
-      HapticFeedback.mediumImpact();
-    } catch (_) {}
+  Future<void> _recarregarApenasChamados() async {
+    if (!mounted) return;
+    final tecnicoId = context.read<EmployeeProvider>().currentEmployee?.id;
+    if (tecnicoId == null) return;
+    await context.read<ChamadoProvider>().carregarChamadosDoTecnico(tecnicoId, data: _selectedDate);
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(
-          children: [
-            Icon(Icons.notifications_active, color: Colors.white, size: 32),
-            SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                "📢 Novo chamado atribuído a você!",
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.orange[800],
-        duration: const Duration(seconds: 8),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
-    );
+  void _notificarNovoChamado() {
+    HapticFeedback.mediumImpact();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("📢 Novo chamado atribuído!"), backgroundColor: Colors.orange),
+      );
+    }
   }
 
   Future<void> _selecionarData() async {
@@ -117,155 +95,205 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     );
     if (date != null && mounted) {
       setState(() => _selectedDate = date);
-      _carregarDados();
+      _carregarTudo();
     }
   }
 
   void _alterarDia(int dias) {
     setState(() => _selectedDate = _selectedDate.add(Duration(days: dias)));
-    _carregarDados();
+    _carregarTudo();
   }
 
   @override
   void dispose() {
     try {
       context.read<ChamadoProvider>().disposeRealtime();
-    } catch (e) {
-      debugPrint("Aviso ao dispose Realtime: $e");
-    }
+    } catch (_) {}
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final employeeProvider = context.watch<EmployeeProvider>();
-    final chamadoProvider = context.watch<ChamadoProvider>();
-    final obraProvider = context.watch<ObraProvider>();
-    final clienteProvider = context.watch<ClienteProvider>();
-    final servicoProvider = context.watch<ServicoProvider>();
+    return Consumer<EmployeeProvider>(
+      builder: (context, employeeProvider, child) {
+        final nome = employeeProvider.currentEmployee?.name ?? 'Carregando...';
+        debugPrint("🔄 [Consumer] Nome final: $nome | ID: ${employeeProvider.currentEmployee?.id}");
 
-    final tecnicoNome = employeeProvider.currentEmployee?.name?.split(' ').first ?? 'Técnico';
-    final chamadosDoDia = chamadoProvider.chamados;
-
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        backgroundColor: Colors.teal[700],
-        title: Row(
-          children: [
-            const Text("Olá, ", style: TextStyle(fontSize: 18, color: Colors.white)),
-            Text(tecnicoNome, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-          ],
-        ),
-        actions: [
-          IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _carregarDados),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: () async {
-              await employeeProvider.logout();
-              if (mounted) Navigator.pushReplacementNamed(context, '/');
-            },
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _carregarDados,
-        child: Column(
-          children: [
-            // Calendário
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Colors.white,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  IconButton(icon: const Icon(Icons.chevron_left), onPressed: () => _alterarDia(-1)),
-                  Expanded(
-                    child: InkWell(
-                      onTap: _selecionarData,
-                      child: Column(
-                        children: [
-                          Text(_weekdayFormat.format(_selectedDate).toUpperCase(), style: const TextStyle(fontSize: 13, color: Colors.grey)),
-                          Text(_dateFormat.format(_selectedDate), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  IconButton(icon: const Icon(Icons.chevron_right), onPressed: () => _alterarDia(1)),
-                ],
-              ),
+        return Scaffold(
+          backgroundColor: Colors.grey[50],
+          appBar: AppBar(
+            backgroundColor: Colors.teal[700],
+            title: Row(
+              children: [
+                const Text("Olá, ", style: TextStyle(fontSize: 18, color: Colors.white)),
+                Text(nome, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+              ],
             ),
-
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : chamadosDoDia.isEmpty
-                  ? const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.assignment_outlined, size: 70, color: Colors.grey),
-                    SizedBox(height: 16),
-                    Text("Nenhum chamado para esta data", style: TextStyle(fontSize: 18)),
-                  ],
-                ),
-              )
-                  : ListView.builder(
-                padding: const EdgeInsets.all(12),
-                itemCount: chamadosDoDia.length,
-                itemBuilder: (context, index) {
-                  final chamado = chamadosDoDia[index];
-                  final obra = obraProvider.obras.firstWhereOrNull((o) => o.id == chamado.obraId);
-                  final cliente = clienteProvider.clientes.firstWhereOrNull((c) => c.id == obra?.clienteId);
-                  final clienteNome = cliente?.nome ?? chamado.clienteNome ?? '—';
-
-                  int qtdConcluido = 0, qtdPendente = 0, qtdSemAtendimento = 0;
-                  final servicosObra = servicoProvider.getServicosDaObra(chamado.obraId);
-
-                  for (var servicoId in chamado.servicosIds) {
-                    final servicoObra = servicosObra.firstWhereOrNull((s) => s['servico_id']?.toString() == servicoId);
-                    final status = (servicoObra?['status'] ?? 'nao_iniciado').toString().toLowerCase();
-
-                    if (status == 'concluido') qtdConcluido++;
-                    else if (status == 'pendente') qtdPendente++;
-                    else qtdSemAtendimento++;
-                  }
-
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    elevation: 3,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(16),
-                      leading: const CircleAvatar(backgroundColor: Colors.teal, child: Icon(Icons.assignment, color: Colors.white)),
-                      title: Text(obra?.nome ?? chamado.obraNome ?? 'Obra sem nome', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("Cliente: $clienteNome"),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              _buildStatusChip(Icons.check_circle, Colors.green, qtdConcluido),
-                              const SizedBox(width: 8),
-                              _buildStatusChip(Icons.warning_amber, Colors.orange, qtdPendente),
-                              const SizedBox(width: 8),
-                              _buildStatusChip(Icons.access_time, Colors.blueGrey, qtdSemAtendimento),
-                            ],
-                          ),
-                        ],
-                      ),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => ChamadoExecucaoScreen(chamado: chamado)),
-                        ).then((_) => _carregarDados());
-                      },
-                    ),
-                  );
+            actions: [
+              IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _carregarTudo),
+              IconButton(
+                icon: const Icon(Icons.logout, color: Colors.white),
+                onPressed: () async {
+                  await context.read<EmployeeProvider>().logout();
+                  if (mounted) Navigator.pushReplacementNamed(context, '/');
                 },
               ),
+            ],
+          ),
+          body: _isLoading && employeeProvider.currentEmployee == null
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+            onRefresh: _carregarTudo,
+            child: Consumer<ChamadoProvider>(
+              builder: (context, chamadoProvider, _) {
+                return Column(
+                  children: [
+                    // Calendário
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      color: Colors.white,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(icon: const Icon(Icons.chevron_left), onPressed: () => _alterarDia(-1)),
+                          Expanded(
+                            child: InkWell(
+                              onTap: _selecionarData,
+                              child: Column(
+                                children: [
+                                  Text(_weekdayFormat.format(_selectedDate).toUpperCase(), style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                                  Text(_dateFormat.format(_selectedDate), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                          ),
+                          IconButton(icon: const Icon(Icons.chevron_right), onPressed: () => _alterarDia(1)),
+                        ],
+                      ),
+                    ),
+
+                    Expanded(
+                      child: _isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : chamadoProvider.chamados.isEmpty
+                          ? const Center(child: Text("Nenhum chamado para esta data"))
+                          : ListView.builder(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: chamadoProvider.chamados.length,
+                        itemBuilder: (context, index) {
+                          final chamado = chamadoProvider.chamados[index];
+                          final obraProvider = context.watch<ObraProvider>();
+                          final clienteProvider = context.watch<ClienteProvider>();
+                          final servicoProvider = context.watch<ServicoProvider>();
+
+                          final obra = obraProvider.obras.firstWhereOrNull((o) => o.id == chamado.obraId);
+                          final cliente = clienteProvider.clientes.firstWhereOrNull((c) => c.id == obra?.clienteId);
+                          final clienteNome = cliente?.nome ?? chamado.clienteNome ?? '—';
+
+                          int qtdConcluido = 0, qtdPendente = 0, qtdSemAtendimento = 0;
+                          final servicosObra = servicoProvider.getServicosDaObra(chamado.obraId);
+
+                          for (var servicoId in chamado.servicosIds) {
+                            final servicoObra = servicosObra.firstWhereOrNull((s) => s['servico_id']?.toString() == servicoId.toString());
+                            final status = (servicoObra?['status'] ?? 'nao_iniciado').toString().toLowerCase();
+
+                            if (status == 'concluido') qtdConcluido++;
+                            else if (status == 'pendente') qtdPendente++;
+                            else qtdSemAtendimento++;
+                          }
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            elevation: 3,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.all(16),
+                              leading: const CircleAvatar(
+                                backgroundColor: Colors.teal,
+                                child: Icon(Icons.assignment, color: Colors.white),
+                              ),
+                              title: Text(
+                                obra?.nome ?? chamado.obraNome ?? 'Obra sem nome',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Cliente: $clienteNome"),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      _buildStatusChip(Icons.check_circle, Colors.green, qtdConcluido),
+                                      const SizedBox(width: 8),
+                                      _buildStatusChip(Icons.warning_amber, Colors.orange, qtdPendente),
+                                      const SizedBox(width: 8),
+                                      _buildStatusChip(Icons.access_time, Colors.blueGrey, qtdSemAtendimento),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.location_on, color: Colors.teal, size: 28),
+                                tooltip: "Ver endereço",
+                                onPressed: () => _mostrarInfoObra(context, cliente),
+                              ),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => ChamadoExecucaoScreen(chamado: chamado)),
+                              ).then((_) => _carregarTudo()),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _mostrarInfoObra(BuildContext context, dynamic cliente) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Endereço do Cliente", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            if (cliente != null) ...[
+              ListTile(
+                leading: const Icon(Icons.person),
+                title: const Text("Cliente"),
+                subtitle: Text(cliente.nome ?? '—'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.location_on),
+                title: const Text("Endereço"),
+                subtitle: Text(cliente.endereco ?? 'Endereço não cadastrado'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.location_city),
+                title: const Text("Cidade / Bairro"),
+                subtitle: Text("${cliente.cidade ?? ''} - ${cliente.bairro ?? ''}"),
+              ),
+              if (cliente.cep != null)
+                ListTile(
+                  leading: const Icon(Icons.pin),
+                  title: const Text("CEP"),
+                  subtitle: Text(cliente.cep),
+                ),
+            ] else
+              const Text("Nenhum cliente vinculado"),
+            const SizedBox(height: 20),
           ],
         ),
       ),

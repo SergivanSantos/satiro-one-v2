@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../auth/providers/auth_provider.dart';
 import '../rh/providers/employee_provider.dart';
 
 // Telas principais
@@ -12,12 +11,11 @@ import '../rh/screens/employee_list_screen.dart';
 import '../dashboard/screens/dashboard_screen.dart';
 import '../configuracoes/screens/configuracoes_screen.dart';
 
-// Telas específicas
+// Telas específicas do técnico
 import '../obra/screens/tecnico_home_screen.dart';
 
-// === NOVAS TELAS DE CHAMADOS ===
-import '../chamado/screens/chamado_list_tecnico_screen.dart';
-import '../../features/chamado/screens/chamado_list_admin_screen.dart'; // vamos criar no próximo lote
+// Telas de chamados
+import '../chamado/screens/chamado_list_admin_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -44,15 +42,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final employeeProvider = context.watch<EmployeeProvider>();
-    final role = (employeeProvider.currentEmployee?.role ?? 'tecnico').toLowerCase();
-    final userName = employeeProvider.currentEmployee?.name?.split(' ').first ?? 'Usuário';
+    final employee = employeeProvider.currentEmployee;
 
-    // Se for técnico → vai direto para a tela simples dele
-    if (role == 'tecnico') {
+    // Se for técnico → vai direto para a tela dele
+    if (employee?.isTecnico == true) {
       return const TecnicoHomeScreen();
     }
 
-    // Admin / Gerente → menu completo
+    // Admin / Gerente / RH → menu completo
+    final userName = employee?.name?.split(' ').first ?? 'Usuário';
+
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 62,
@@ -127,7 +126,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ObraListScreen(),
           ClientesListScreen(),
           EmployeeListScreen(),
-          ChamadoListAdminScreen(),   // ← Nova tela de Chamados (Admin)
+          ChamadoListAdminScreen(),
           ConfiguracoesScreen(),
         ],
       ),

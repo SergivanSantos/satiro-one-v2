@@ -8,7 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // ==================== PROVIDERS ATIVOS ====================
 import 'features/ambiente/providers/ambiente_provider.dart';
 import 'features/atendimento/providers/atendimento_provider.dart';
-import 'features/auth/providers/auth_provider.dart';
 import 'features/backup/providers/backup_provider.dart';
 import 'features/chamado/providers/chamado_provider.dart';
 import 'features/client/providers/cliente_provider.dart';
@@ -24,8 +23,6 @@ import 'features/parceiros/providers/parceiros_provider.dart';
 import 'features/pop/providers/pop_provider.dart';
 import 'features/rh/providers/employee_provider.dart';
 import 'features/servicos/providers/servico_provider.dart';
-
-
 
 // ==================== TELAS ====================
 import 'features/auth/screens/auth_wrapper.dart';
@@ -44,8 +41,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        // Core / Auth
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        // Core
         ChangeNotifierProvider(create: (_) => EmployeeProvider()),
 
         // Features Ativas
@@ -61,15 +57,10 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AmbienteProvider()),
         ChangeNotifierProvider(create: (_) => BackupProvider()),
         ChangeNotifierProvider(create: (_) => MaterialProvider()),
-        ChangeNotifierProvider(create: (_) => FaseProvider()),
         ChangeNotifierProvider(create: (_) => OrdemServicoProvider()),
         ChangeNotifierProvider(create: (_) => OrdemAtendimentoProvider()),
         ChangeNotifierProvider(create: (_) => ChamadoProvider()),
         ChangeNotifierProvider(create: (_) => AtendimentoProvider()),
-
-
-
-
       ],
       child: const MyApp(),
     ),
@@ -92,7 +83,7 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.grey[50],
 
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF00695C), // teal[900]
+          backgroundColor: Color(0xFF00695C),
           foregroundColor: Colors.white,
           elevation: 2,
           iconTheme: IconThemeData(color: Colors.white),
@@ -113,7 +104,7 @@ class MyApp extends StatelessWidget {
         ),
 
         // ==================== CARDS ====================
-        cardTheme: CardThemeData(          // ← Corrigido aqui
+        cardTheme: CardThemeData(   // Mantido exatamente como você tinha
           elevation: 3,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           color: Colors.white,
@@ -144,7 +135,6 @@ class MyApp extends StatelessWidget {
         ),
       ),
 
-      // ==================== LOCALIZAÇÃO ====================
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
