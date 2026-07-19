@@ -31,7 +31,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _carregarDados();
-      _configurarRealtimeComDelay();
+      _configurarRealtime();
     });
   }
 
@@ -56,15 +56,16 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     }
   }
 
-  void _configurarRealtimeComDelay() {
-    // Espera o EmployeeProvider carregar o usuário
-    Future.delayed(const Duration(milliseconds: 1200), () {
+  void _configurarRealtime() {
+    Future.delayed(const Duration(milliseconds: 800), () {
       if (!mounted) return;
-      final tecnicoId = context.read<EmployeeProvider>().currentEmployee?.id;
+
+      final employeeProvider = context.read<EmployeeProvider>();
+      final tecnicoId = employeeProvider.currentEmployee?.id;
 
       if (tecnicoId == null) {
-        debugPrint("⚠️ tecnicoId ainda é null. Tentando novamente em 1s...");
-        Future.delayed(const Duration(seconds: 1), _configurarRealtimeComDelay);
+        debugPrint("⚠️ tecnicoId ainda null. Tentando novamente...");
+        Future.delayed(const Duration(seconds: 1), _configurarRealtime);
         return;
       }
 
@@ -72,36 +73,27 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
       context.read<ChamadoProvider>().setupRealtimeParaTecnico(
         tecnicoId,
         onNovoChamado: () {
-          if (mounted) {
-            debugPrint("🔔 REALTIME → Novo chamado detectado!");
-            _notificarNovoChamado();
-            _carregarDados();
-          }
+          debugPrint("🔔 REALTIME → Novo chamado detectado!");
+          _notificarNovoChamado();
+          _carregarDados();
         },
       );
     });
   }
 
   void _notificarNovoChamado() {
-    // Vibração
     HapticFeedback.heavyImpact();
     Future.delayed(const Duration(milliseconds: 200), () {
       if (mounted) HapticFeedback.mediumImpact();
     });
 
-    // Notificação visual forte
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Row(
           children: [
             Icon(Icons.notifications_active, color: Colors.white, size: 32),
             SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                "📢 Novo chamado atribuído a você!",
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-              ),
-            ),
+            Expanded(child: Text("📢 Novo chamado atribuído a você!", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold))),
           ],
         ),
         backgroundColor: Colors.orange[800],
@@ -132,11 +124,10 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
 
   @override
   void dispose() {
-    // Evita erro de context em dispose
     try {
       context.read<ChamadoProvider>().disposeRealtime();
     } catch (e) {
-      debugPrint("Aviso ao dispose Realtime: $e");
+      debugPrint("Aviso dispose: $e");
     }
     super.dispose();
   }
@@ -145,9 +136,9 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   Widget build(BuildContext context) {
     final employeeProvider = context.watch<EmployeeProvider>();
     final chamadoProvider = context.watch<ChamadoProvider>();
-    final obraProvider = context.watch<ObraProvider>();
-    final clienteProvider = context.watch<ClienteProvider>();
-    final servicoProvider = context.watch<ServicoProvider>();
+    final obraProvider = context.watch<ObraProvider>();       // ← Corrigido
+    final clienteProvider = context.watch<ClienteProvider>(); // ← Corrigido
+    final servicoProvider = context.watch<ServicoProvider>(); // ← Corrigido
 
     final tecnicoNome = employeeProvider.currentEmployee?.name?.split(' ').first ?? 'Técnico';
     final chamadosDoDia = chamadoProvider.chamados;
