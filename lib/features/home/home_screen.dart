@@ -15,7 +15,7 @@ import '../configuracoes/screens/configuracoes_screen.dart';
 import '../obra/screens/tecnico_home_screen.dart';
 
 // Telas de chamados
-import '../chamado/screens/chamado_list_admin_screen.dart';
+import '../chamado/screens/admin/chamado_list_admin_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
