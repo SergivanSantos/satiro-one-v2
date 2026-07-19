@@ -82,6 +82,9 @@
       - assets/images/logo.png
       # Adicione aqui outros assets que você usa, ex:
       # - assets/images/background.jpg
+      - assets/sound/notification.mp3
+
+
 
     # Fontes customizadas
     fonts:

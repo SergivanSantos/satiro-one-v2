@@ -79,18 +79,16 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   }
 
   void _notificarNovoChamado() {
-    // Vibração forte
+    // Vibração forte (funciona em mobile)
     HapticFeedback.heavyImpact();
 
-    // Som (precisa adicionar pacote audioplayers)
-    // Se ainda não tiver o pacote, adicione no pubspec.yaml:
-    //audioplayers: ^6.1.0
-
+    // Som (tenta tocar, mas não quebra se falhar)
     try {
-      // Toca som padrão (você pode adicionar um arquivo assets/sound/notification.mp3)
-        AudioPlayer().play(AssetSource('sounds/notification.mp3'));
+      final player = AudioPlayer();
+      player.play(AssetSource('sound/notification.mp3'));
+      debugPrint("🎵 Som de notificação tocado");
     } catch (e) {
-      debugPrint("Som não disponível: $e");
+      debugPrint("🔇 Não foi possível tocar som: $e");
     }
 
     if (mounted) {
@@ -103,6 +101,8 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
       );
     }
   }
+
+
 
   Future<void> _selecionarData() async {
     final date = await showDatePicker(
