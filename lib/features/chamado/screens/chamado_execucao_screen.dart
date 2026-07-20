@@ -9,7 +9,6 @@ import '../../servicos/screens/obra_servico_form_screen.dart';
 import '../providers/chamado_provider.dart';
 import '../models/chamado.dart';
 import '../../servicos/providers/servico_provider.dart';
-import '../../servicos/models/servico.dart';
 import '../../atendimento/providers/atendimento_provider.dart';
 import '../../rh/providers/employee_provider.dart';
 
@@ -42,17 +41,23 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
     try {
       final servicoProvider = context.read<ServicoProvider>();
 
-      debugPrint("🔄 [Execução] Carregando dados para chamado ${widget.chamado.id}");
+      debugPrint("🔄 [Execução] Carregando serviços para obra: ${widget.chamado.obraId}");
 
+      // Carrega serviços da obra (com join completo)
       await servicoProvider.carregarServicosDaObra(widget.chamado.obraId);
 
+      // Filtra apenas os serviços deste chamado
       _servicosDoChamado = servicoProvider.getServicosDaObra(widget.chamado.obraId)
           .where((s) => widget.chamado.servicosIds.contains(s['servico_id']?.toString()))
           .toList();
 
-      debugPrint("✅ ${_servicosDoChamado.length} serviços filtrados");
+      debugPrint("✅ ${_servicosDoChamado.length} serviços carregados para este chamado");
+
+      for (var s in _servicosDoChamado) {
+        debugPrint("   → Serviço: ${s['servico']?['nome'] ?? 'Sem nome'} | ID: ${s['servico_id']}");
+      }
     } catch (e) {
-      debugPrint("❌ Erro ao carregar serviços do chamado: $e");
+      debugPrint("❌ Erro ao carregar serviços: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -267,26 +272,29 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Execução - ${widget.chamado.numeroDisplay}"),
+        title: Text("Execução - ${widget.chamado.numeroDisplay ?? widget.chamado.id}"),
         backgroundColor: Colors.teal,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
+          : _servicosDoChamado.isEmpty
+          ? const Center(child: Text("Nenhum serviço encontrado para este chamado"))
           : ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: _servicosDoChamado.length,
         itemBuilder: (context, index) {
           final item = _servicosDoChamado[index];
-          final servicoId = item['servico_id']?.toString() ?? '';
-          final servicoGlobal = context.read<ServicoProvider>().servicos.firstWhereOrNull((s) => s.id == servicoId);
-          final nomeServico = servicoGlobal?.nome ?? 'Serviço sem nome';
+
+          // Nome do serviço (prioridade no join da obra)
+          final nomeServico = item['servico']?['nome']?.toString() ??
+              'Serviço sem nome';
+
           final observacoes = item['observacoes']?.toString() ?? 'Sem observações';
           final statusAtual = (item['status'] ?? 'nao_iniciado').toString().toLowerCase();
 
           final bool jaConcluido = statusAtual == 'concluido';
-          final bool temPOP = servicoGlobal?.popUrl != null && servicoGlobal!.popUrl!.isNotEmpty;
-
-          debugPrint("📌 Serviço $nomeServico | POP: $temPOP | URL: ${servicoGlobal?.popUrl}");
+          final String? popUrl = item['servico']?['pops']?['arquivo_url'] ??
+              item['servico']?['pop_url'];
 
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
@@ -298,21 +306,22 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
                   Text(observacoes),
                   Text(
                     "Status: ${statusAtual.toUpperCase()}",
-                    style: TextStyle(color: jaConcluido ? Colors.green : Colors.orange),
+                    style: TextStyle(
+                      color: jaConcluido ? Colors.green : Colors.orange,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // ÍCONE POP
-                  if (temPOP)
+                  if (popUrl != null && popUrl.isNotEmpty)
                     IconButton(
                       icon: const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28),
-                      tooltip: servicoGlobal?.popTitulo ?? 'Abrir POP',
-                      onPressed: () => _abrirPOP(servicoGlobal!.popUrl),
+                      tooltip: "Abrir POP",
+                      onPressed: () => _abrirPOP(popUrl),
                     ),
-
                   IconButton(
                     icon: const Icon(Icons.check_circle, color: Colors.green),
                     onPressed: jaConcluido ? null : () => _abrirModalConcluir(item),
@@ -323,9 +332,7 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
                   ),
                 ],
               ),
-              onTap: jaConcluido
-                  ? () => _visualizarSolucao(item)   // ← Restaurado
-                  : null,
+              onTap: jaConcluido ? () => _visualizarSolucao(item) : null,
             ),
           );
         },

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../rh/providers/employee_provider.dart';
 import '../../chamado/providers/chamado_provider.dart';
@@ -12,6 +13,7 @@ import '../../chamado/screens/chamado_execucao_screen.dart';
 import '../../obra/providers/obra_provider.dart';
 import '../../client/providers/cliente_provider.dart';
 import '../../servicos/providers/servico_provider.dart';
+import '../models/obra.dart';
 
 class TecnicoHomeScreen extends StatefulWidget {
   const TecnicoHomeScreen({super.key});
@@ -30,7 +32,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _carregarTudo();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _carregarTudo());
   }
 
   Future<void> _carregarTudo() async {
@@ -41,13 +43,18 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     final chamadoProvider = context.read<ChamadoProvider>();
 
     try {
+      debugPrint("🔄 [TécnicoHome] Iniciando carregamento completo");
+
       await employeeProvider.loadCurrentEmployee();
 
       final tecnicoId = employeeProvider.currentEmployee?.id;
       if (tecnicoId == null) {
-        Future.delayed(const Duration(milliseconds: 300), _carregarTudo);
+        debugPrint("⚠️ Técnico ainda null, tentando novamente...");
+        Future.delayed(const Duration(milliseconds: 500), _carregarTudo);
         return;
       }
+
+      debugPrint("✅ Técnico carregado: $tecnicoId - ${employeeProvider.currentEmployee?.name}");
 
       if (!chamadoProvider.jaTemSubscriptionAtiva(tecnicoId)) {
         chamadoProvider.setupRealtimeParaTecnico(
@@ -65,7 +72,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
         context.read<ClienteProvider>().carregarClientes(),
       ]);
     } catch (e) {
-      debugPrint("❌ Erro: $e");
+      debugPrint("❌ Erro ao carregar: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -77,44 +84,21 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     if (tecnicoId == null) return;
 
     await context.read<ChamadoProvider>().carregarChamadosDoTecnico(tecnicoId, data: _selectedDate);
-
-    // Força rebuild da tela
-    if (mounted) {
-      setState(() {});
-      debugPrint("🔄 Forçando rebuild da lista após mudança (desatribuição/exclusão)");
-    }
+    if (mounted) setState(() {});
   }
 
   void _notificarNovoChamado() {
-    // Vibração mais perceptível
     HapticFeedback.heavyImpact();
-    Future.delayed(const Duration(milliseconds: 120), () => HapticFeedback.heavyImpact());
+    Future.delayed(const Duration(milliseconds: 150), () => HapticFeedback.heavyImpact());
 
-    // Som
     try {
       final player = AudioPlayer();
       player.play(AssetSource('sound/notification.mp3'));
-      debugPrint("🎵 Som tocado");
-    } catch (e) {
-      debugPrint("🔇 Som não disponível: $e");
-    }
+    } catch (_) {}
 
-    // Snackbar mais visível
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.notifications_active, color: Colors.white),
-              SizedBox(width: 12),
-              Text("📢 Novo chamado atribuído!"),
-            ],
-          ),
-          backgroundColor: Colors.orange[700],
-          duration: const Duration(seconds: 5),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
+        const SnackBar(content: Text("📢 Novo chamado atribuído!"), backgroundColor: Colors.orange),
       );
     }
   }
@@ -139,28 +123,22 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
 
   @override
   void dispose() {
-    try {
-      context.read<ChamadoProvider>().disposeRealtime();
-    } catch (_) {}
+    context.read<ChamadoProvider>().disposeRealtime();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<EmployeeProvider>(
-      builder: (context, employeeProvider, child) {
-        final nome = employeeProvider.currentEmployee?.name ?? 'Carregando...';
+      builder: (context, employeeProvider, _) {
+        final nomeCompleto = employeeProvider.currentEmployee?.name ?? 'Técnico';
+        debugPrint("🔄 [Consumer Build] Nome final: $nomeCompleto | ID: ${employeeProvider.currentEmployee?.id}");
 
         return Scaffold(
           backgroundColor: Colors.grey[50],
           appBar: AppBar(
             backgroundColor: Colors.teal[700],
-            title: Row(
-              children: [
-                const Text("Olá, ", style: TextStyle(fontSize: 18, color: Colors.white)),
-                Text(nome, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-              ],
-            ),
+            title: Text("Olá, $nomeCompleto", style: const TextStyle(fontWeight: FontWeight.bold)),
             actions: [
               IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _carregarTudo),
               IconButton(
@@ -172,7 +150,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
               ),
             ],
           ),
-          body: _isLoading && employeeProvider.currentEmployee == null
+          body: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : RefreshIndicator(
             onRefresh: _carregarTudo,
@@ -205,9 +183,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
                     ),
 
                     Expanded(
-                      child: _isLoading
-                          ? const Center(child: CircularProgressIndicator())
-                          : chamadoProvider.chamados.isEmpty
+                      child: chamadoProvider.chamados.isEmpty
                           ? const Center(child: Text("Nenhum chamado para esta data"))
                           : ListView.builder(
                         padding: const EdgeInsets.all(12),
@@ -226,9 +202,8 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
                           final servicosObra = servicoProvider.getServicosDaObra(chamado.obraId);
 
                           for (var servicoId in chamado.servicosIds) {
-                            final servicoObra = servicosObra.firstWhereOrNull((s) => s['servico_id']?.toString() == servicoId.toString());
-                            final status = (servicoObra?['status'] ?? 'nao_iniciado').toString().toLowerCase();
-
+                            final item = servicosObra.firstWhereOrNull((s) => s['servico_id']?.toString() == servicoId.toString());
+                            final status = (item?['status'] ?? 'nao_iniciado').toString().toLowerCase();
                             if (status == 'concluido') qtdConcluido++;
                             else if (status == 'pendente') qtdPendente++;
                             else qtdSemAtendimento++;
@@ -259,9 +234,8 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
                                 ],
                               ),
                               trailing: IconButton(
-                                icon: const Icon(Icons.location_on, color: Colors.teal, size: 28),
-                                tooltip: "Ver endereço",
-                                onPressed: () => _mostrarInfoObra(context, cliente),
+                                icon: const Icon(Icons.info_outline, color: Colors.teal, size: 28),
+                                onPressed: () => _mostrarInfoObra(context, obra, cliente),
                               ),
                               onTap: () => Navigator.push(
                                 context,
@@ -282,7 +256,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     );
   }
 
-  void _mostrarInfoObra(BuildContext context, dynamic cliente) {
+  void _mostrarInfoObra(BuildContext context, Obra? obra, dynamic cliente) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -293,32 +267,39 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Endereço do Cliente", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const Text("Informações da Obra", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
+
             if (cliente != null) ...[
+              ListTile(leading: const Icon(Icons.person), title: const Text("Cliente"), subtitle: Text(cliente.nome ?? '—')),
+            ],
+
+            if (obra != null) ...[
               ListTile(
-                leading: const Icon(Icons.person),
-                title: const Text("Cliente"),
-                subtitle: Text(cliente.nome ?? '—'),
+                leading: const Icon(Icons.location_on, color: Colors.blue),
+                title: const Text("Endereço da Obra"),
+                subtitle: Text(obra.enderecoCompleto),
               ),
               ListTile(
-                leading: const Icon(Icons.location_on),
-                title: const Text("Endereço"),
-                subtitle: Text(cliente.endereco ?? 'Endereço não cadastrado'),
+                leading: const Icon(Icons.engineering, color: Colors.teal),
+                title: const Text("Responsável"),
+                subtitle: Text(obra.responsavelNome ?? 'Não informado'),
               ),
-              ListTile(
-                leading: const Icon(Icons.location_city),
-                title: const Text("Cidade / Bairro"),
-                subtitle: Text("${cliente.cidade ?? ''} - ${cliente.bairro ?? ''}"),
-              ),
-              if (cliente.cep != null)
+              if (obra.responsavelContato != null && obra.responsavelContato!.isNotEmpty)
                 ListTile(
-                  leading: const Icon(Icons.pin),
-                  title: const Text("CEP"),
-                  subtitle: Text(cliente.cep),
+                  leading: const Icon(Icons.phone, color: Colors.green),
+                  title: const Text("Contato / WhatsApp"),
+                  subtitle: Text(obra.responsavelContato!),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.message, color: Colors.green, size: 28),
+                    onPressed: () async {
+                      final numero = obra.responsavelContato!.replaceAll(RegExp(r'[^0-9]'), '');
+                      final url = Uri.parse("https://wa.me/$numero");
+                      if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
+                    },
+                  ),
                 ),
-            ] else
-              const Text("Nenhum cliente vinculado"),
+            ],
             const SizedBox(height: 20),
           ],
         ),

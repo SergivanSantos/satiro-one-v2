@@ -13,6 +13,18 @@ class Obra {
   final String status;
   final bool usaFases;
 
+  // === RESPONSÁVEL DA OBRA ===
+  final String? responsavelNome;
+  final String? responsavelContato;
+
+  // === ENDEREÇO DA OBRA (NOVO) ===
+  final String? rua;
+  final String? numero;
+  final String? bairro;
+  final String? cidade;
+  final String? estado;
+  final String? complemento;
+
   // === CAMPOS PARA CONTROLE DE FASE ===
   final String? faseAtualId;
   final String? faseAtualNome;
@@ -36,6 +48,14 @@ class Obra {
     this.dataFim,
     this.status = 'em_andamento',
     this.usaFases = false,
+    this.responsavelNome,
+    this.responsavelContato,
+    this.rua,
+    this.numero,
+    this.bairro,
+    this.cidade,
+    this.estado,
+    this.complemento,
     this.faseAtualId,
     this.faseAtualNome,
     this.dataUltimaMudancaFase,
@@ -52,7 +72,6 @@ class Obra {
 
     debugPrint("🔍 fromMap - Obra: ${map['nome']} | Fase Atual ID: $faseAtualId");
 
-    // Busca a fase ATUAL dentro da lista de obra_fase
     final obraFaseList = map['obra_fase'] as List<dynamic>? ?? [];
     debugPrint("   → Encontradas ${obraFaseList.length} fases na obra_fase");
 
@@ -80,8 +99,6 @@ class Obra {
         ? DateTime.tryParse(obraFaseAtual!['data_fim_prevista'].toString())
         : null;
 
-    debugPrint("   → Data Fim Previsto encontrada: $dataFim");
-
     return Obra(
       id: map['id']?.toString() ?? '',
       nome: map['nome']?.toString() ?? '',
@@ -94,6 +111,18 @@ class Obra {
       status: (map['status']?.toString() ?? 'em_andamento').toLowerCase(),
       usaFases: map['usa_fases'] == true || map['usa_fases'] == 'true' || map['usa_fases'] == 1,
 
+      // Responsável
+      responsavelNome: map['responsavel_nome']?.toString(),
+      responsavelContato: map['responsavel_contato']?.toString(),
+
+      // Endereço da Obra
+      rua: map['rua']?.toString(),
+      numero: map['numero']?.toString(),
+      bairro: map['bairro']?.toString(),
+      cidade: map['cidade']?.toString(),
+      estado: map['estado']?.toString(),
+      complemento: map['complemento']?.toString(),
+
       faseAtualId: faseAtualId,
       faseAtualNome: faseAtualData?['nome']?.toString() ?? map['fase_atual_nome']?.toString(),
 
@@ -102,7 +131,6 @@ class Obra {
           : null,
       responsavelUltimaMudanca: map['responsavel_ultima_mudanca']?.toString(),
 
-      // Datas da fase ATUAL
       dataInicioPrevistaFase: obraFaseAtual?['data_inicio_prevista'] != null
           ? DateTime.tryParse(obraFaseAtual!['data_inicio_prevista'].toString())
           : null,
@@ -138,6 +166,7 @@ class Obra {
     } else {
       return "No Prazo (${diasRestantes}d)";
     }
+
   }
 
   Color get corCronograma {
@@ -149,5 +178,24 @@ class Obra {
     if (diasRestantes < 0) return Colors.red;
     if (diasRestantes <= 10) return Colors.deepOrange;   // ← Alterado para 10 dias
     return Colors.orange;
+  }
+
+  String? get responsavelWhatsApp {
+    if (responsavelContato == null) return null;
+    final clean = responsavelContato!.replaceAll(RegExp(r'[^0-9]'), '');
+    return clean.length >= 10 ? clean : null;
+  }
+
+  // Endereço completo formatado
+  String get enderecoCompleto {
+    final parts = <String>[];
+    if (rua != null) parts.add(rua!);
+    if (numero != null) parts.add(numero!);
+    if (bairro != null) parts.add(bairro!);
+    if (cidade != null) parts.add(cidade!);
+    if (estado != null) parts.add(estado!);
+    if (complemento != null && complemento!.isNotEmpty) parts.add("($complemento)");
+
+    return parts.isEmpty ? 'Endereço não cadastrado' : parts.join(', ');
   }
 }

@@ -1,11 +1,11 @@
 // lib/features/obra/providers/obra_wizard_provider.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/obra.dart';
 import '../../fase/models/fase.dart';
-import 'obra_provider.dart';   // ← Import necessário
+import 'obra_provider.dart';
 
 class ObraWizardProvider extends ChangeNotifier {
   String nomeObra = '';
@@ -14,6 +14,16 @@ class ObraWizardProvider extends ChangeNotifier {
   String? arquitetoId;
   String? construtoraId;
   DateTime? dataInicio;
+
+  // Novos campos
+  String? responsavelNome;
+  String? responsavelContato;
+  String? rua;
+  String? numero;
+  String? bairro;
+  String? cidade;
+  String? estado;
+  String? complemento;
 
   List<Fase> todasFases = [];
   List<String> fasesSelecionadasIds = [];
@@ -27,32 +37,25 @@ class ObraWizardProvider extends ChangeNotifier {
 
   String? obraIdParaEditar;
 
-  // ... (todos os métodos anteriores permanecem iguais)
-
+  // ==================== SETTERS ====================
   void atualizarNomeObra(String nome) {
     nomeObra = nome.trim();
     notifyListeners();
   }
 
-  void setClienteId(String? id) {
-    clienteId = id;
-    notifyListeners();
-  }
+  void setClienteId(String? id) { clienteId = id; notifyListeners(); }
+  void setFilialId(String? id) { filialId = id; notifyListeners(); }
+  void setArquiteto(String? id) { arquitetoId = id; notifyListeners(); }
+  void setConstrutora(String? id) { construtoraId = id; notifyListeners(); }
 
-  void setFilialId(String? id) {
-    filialId = id;
-    notifyListeners();
-  }
-
-  void setArquiteto(String? id) {
-    arquitetoId = id;
-    notifyListeners();
-  }
-
-  void setConstrutora(String? id) {
-    construtoraId = id;
-    notifyListeners();
-  }
+  void setResponsavelNome(String? valor) { responsavelNome = valor?.trim(); notifyListeners(); }
+  void setResponsavelContato(String? valor) { responsavelContato = valor?.trim(); notifyListeners(); }
+  void setRua(String? valor) { rua = valor?.trim(); notifyListeners(); }
+  void setNumero(String? valor) { numero = valor?.trim(); notifyListeners(); }
+  void setBairro(String? valor) { bairro = valor?.trim(); notifyListeners(); }
+  void setCidade(String? valor) { cidade = valor?.trim(); notifyListeners(); }
+  void setEstado(String? valor) { estado = valor?.trim().toUpperCase(); notifyListeners(); }
+  void setComplemento(String? valor) { complemento = valor?.trim(); notifyListeners(); }
 
   void setUsaFases(bool value) {
     _usaFases = value;
@@ -60,17 +63,16 @@ class ObraWizardProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ==================== CARREGAMENTO ====================
   Future<void> carregarFasesDisponiveis() async {
     try {
       final res = await Supabase.instance.client
           .from('fase')
           .select()
           .eq('ativo', true)
-          .order('ordem', ascending: true);
-
+          .order('ordem');
       todasFases = res.map<Fase>((f) => Fase.fromMap(f)).toList();
       notifyListeners();
-      debugPrint("✅ ${todasFases.length} fases carregadas");
     } catch (e) {
       debugPrint("❌ Erro ao carregar fases: $e");
     }
@@ -83,10 +85,8 @@ class ObraWizardProvider extends ChangeNotifier {
           .select('id, nome')
           .eq('ativa', true)
           .order('nome');
-
       _filiaisDisponiveis = List<Map<String, dynamic>>.from(res);
       notifyListeners();
-      debugPrint("✅ ${_filiaisDisponiveis.length} filiais carregadas no Wizard");
     } catch (e) {
       debugPrint("❌ Erro ao carregar filiais: $e");
     }
@@ -100,9 +100,19 @@ class ObraWizardProvider extends ChangeNotifier {
     arquitetoId = obra.arquitetoId;
     construtoraId = obra.construtoraId;
     dataInicio = obra.dataInicio;
-    _usaFases = obra.usaFases;
+    _usaFases = obra.usaFases ?? false;
+
+    responsavelNome = obra.responsavelNome;
+    responsavelContato = obra.responsavelContato;
+    rua = obra.rua;
+    numero = obra.numero;
+    bairro = obra.bairro;
+    cidade = obra.cidade;
+    estado = obra.estado;
+    complemento = obra.complemento;
 
     _carregarFasesDaObra(obra.id);
+    _carregarEstruturaDaObra(obra.id);   // ← Carrega pavimentos + ambientes
     notifyListeners();
   }
 
@@ -112,15 +122,49 @@ class ObraWizardProvider extends ChangeNotifier {
           .from('obra_fase')
           .select('fase_id')
           .eq('obra_id', obraId);
-
       fasesSelecionadasIds = res.map((f) => f['fase_id'].toString()).toList();
-      debugPrint("✅ ${fasesSelecionadasIds.length} fases carregadas da obra em edição");
       notifyListeners();
     } catch (e) {
-      debugPrint("❌ Erro ao carregar fases da obra: $e");
+      debugPrint("❌ Erro ao carregar fases: $e");
     }
   }
 
+  Future<void> _carregarEstruturaDaObra(String obraId) async {
+    try {
+      final pavimentosRes = await Supabase.instance.client
+          .from('pavimento')
+          .select()
+          .eq('obra_id_original', obraId)
+          .order('ordem');
+
+      pisos.clear();
+
+      for (final p in pavimentosRes) {
+        final pisoId = p['id'] as String;
+        final ambientesRes = await Supabase.instance.client
+            .from('obra_ambiente')
+            .select('nome')
+            .eq('obra_piso_id', pisoId)
+            .order('ordem');
+
+        final ambientes = (ambientesRes as List)
+            .map((a) => a['nome'] as String)
+            .toList();
+
+        pisos.add(PisoTemp(
+          id: pisoId,
+          nome: p['nome'] ?? 'Pavimento',
+          ambientes: ambientes,
+        ));
+      }
+      notifyListeners();
+      debugPrint("✅ Estrutura carregada: ${pisos.length} pavimentos");
+    } catch (e) {
+      debugPrint("❌ Erro ao carregar estrutura: $e");
+    }
+  }
+
+  // ==================== FASES ====================
   void toggleFase(String faseId) {
     if (fasesSelecionadasIds.contains(faseId)) {
       fasesSelecionadasIds.remove(faseId);
@@ -140,16 +184,23 @@ class ObraWizardProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ==================== PISOS E AMBIENTES ====================
   void adicionarPiso(String nome) {
     if (nome.trim().isEmpty) return;
-    if (pisos.any((p) => p.nome.toLowerCase() == nome.trim().toLowerCase())) return;
+
+    final nomeLimpo = nome.trim();
+
+    // Evita duplicados na lista local
+    if (pisos.any((p) => p.nome.toLowerCase() == nomeLimpo.toLowerCase())) return;
 
     pisos.add(PisoTemp(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      nome: nome.trim(),
+      id: 'temp_${DateTime.now().millisecondsSinceEpoch}', // ID temporário
+      nome: nomeLimpo,
       ambientes: [],
     ));
+
     notifyListeners();
+    debugPrint("➕ Piso temporário adicionado: $nomeLimpo");
   }
 
   void removerPiso(String pisoId) {
@@ -172,14 +223,9 @@ class ObraWizardProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ==================== MÉTODO PRINCIPAL ====================
+  // ==================== SALVAMENTO ====================
   Future<bool> salvarObra(BuildContext context) async {
-    if (nomeObra.trim().isEmpty) {
-      debugPrint("❌ Nome da obra é obrigatório");
-      return false;
-    }
-
-    debugPrint("💾 Iniciando salvamento da obra: $nomeObra");
+    if (nomeObra.trim().isEmpty) return false;
 
     try {
       final data = {
@@ -191,35 +237,28 @@ class ObraWizardProvider extends ChangeNotifier {
         'data_inicio': dataInicio?.toIso8601String().split('T')[0],
         'status': 'em_andamento',
         'usa_fases': _usaFases,
+        'responsavel_nome': responsavelNome,
+        'responsavel_contato': responsavelContato,
+        'rua': rua,
+        'numero': numero,
+        'bairro': bairro,
+        'cidade': cidade,
+        'estado': estado,
+        'complemento': complemento,
       };
 
       String obraId;
 
       if (obraIdParaEditar != null) {
-        await Supabase.instance.client
-            .from('obra')
-            .update(data)
-            .eq('id', obraIdParaEditar!);
-
+        await Supabase.instance.client.from('obra').update(data).eq('id', obraIdParaEditar!);
         obraId = obraIdParaEditar!;
-        debugPrint("✅ Obra atualizada com ID: $obraId");
-
-        await Supabase.instance.client.from('obra_fase').delete().eq('obra_id', obraId);
-        await Supabase.instance.client.from('pavimento').delete().eq('obra_id_original', obraId);
-        await Supabase.instance.client.from('obra_ambiente').delete().eq('obra_id', obraId);
-
       } else {
-        final response = await Supabase.instance.client
-            .from('obra')
-            .insert(data)
-            .select()
-            .single();
-
+        final response = await Supabase.instance.client.from('obra').insert(data).select().single();
         obraId = response['id'] as String;
-        debugPrint("✅ Obra criada com ID: $obraId");
       }
 
-      if (_usaFases && fasesSelecionadasIds.isNotEmpty) {
+      // Salva fases e estrutura (agora com deleção prévia)
+      if (_usaFases) {
         await _salvarFasesDaObra(obraId);
       }
 
@@ -227,9 +266,8 @@ class ObraWizardProvider extends ChangeNotifier {
         await _salvarEstrutura(obraId);
       }
 
-      // Atualiza automaticamente o provider principal
       if (context.mounted) {
-        context.read<ObraProvider>().loadObras();
+        Provider.of<ObraProvider>(context, listen: false).loadObras();
       }
 
       limparDados();
@@ -241,9 +279,14 @@ class ObraWizardProvider extends ChangeNotifier {
     }
   }
 
-  // ==================== MÉTODOS AUXILIARES ====================
+  // ==================== MÉTODOS AUXILIARES (CORRIGIDOS) ====================
   Future<void> _salvarFasesDaObra(String obraId) async {
     try {
+      // Remove fases antigas
+      await Supabase.instance.client.from('obra_fase').delete().eq('obra_id', obraId);
+
+      if (fasesSelecionadasIds.isEmpty) return;
+
       final inserts = fasesSelecionadasIds.map((faseId) => {
         'obra_id': obraId,
         'fase_id': faseId,
@@ -253,16 +296,18 @@ class ObraWizardProvider extends ChangeNotifier {
       await Supabase.instance.client.from('obra_fase').insert(inserts);
       debugPrint("✅ ${fasesSelecionadasIds.length} fases vinculadas");
     } catch (e) {
-      debugPrint("❌ Erro ao vincular fases: $e");
+      debugPrint("❌ Erro ao salvar fases: $e");
     }
   }
 
   Future<void> _salvarEstrutura(String obraId) async {
     if (pisos.isEmpty) return;
 
-    debugPrint("🏗️ Salvando estrutura...");
-
     try {
+      // Remove estrutura antiga
+      await Supabase.instance.client.from('pavimento').delete().eq('obra_id_original', obraId);
+      await Supabase.instance.client.from('obra_ambiente').delete().eq('obra_id', obraId);
+
       for (int i = 0; i < pisos.length; i++) {
         final pisoTemp = pisos[i];
 
@@ -280,12 +325,10 @@ class ObraWizardProvider extends ChangeNotifier {
         final String pisoId = pisoResponse['id'];
 
         for (int j = 0; j < pisoTemp.ambientes.length; j++) {
-          final nomeAmb = pisoTemp.ambientes[j];
-
           await Supabase.instance.client.from('obra_ambiente').insert({
             'obra_id': obraId,
             'obra_piso_id': pisoId,
-            'nome': nomeAmb,
+            'nome': pisoTemp.ambientes[j],
             'ordem': j + 1,
             'ativo': true,
           });
@@ -304,6 +347,16 @@ class ObraWizardProvider extends ChangeNotifier {
     arquitetoId = null;
     construtoraId = null;
     dataInicio = null;
+
+    responsavelNome = null;
+    responsavelContato = null;
+    rua = null;
+    numero = null;
+    bairro = null;
+    cidade = null;
+    estado = null;
+    complemento = null;
+
     _usaFases = false;
     fasesSelecionadasIds.clear();
     pisos.clear();
