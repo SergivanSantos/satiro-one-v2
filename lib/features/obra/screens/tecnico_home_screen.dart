@@ -47,18 +47,22 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
 
       await employeeProvider.loadCurrentEmployee();
 
-      final tecnicoId = employeeProvider.currentEmployee?.id;
-      if (tecnicoId == null) {
-        debugPrint("⚠️ Técnico ainda null, tentando novamente...");
-        Future.delayed(const Duration(milliseconds: 500), _carregarTudo);
+      final currentEmployee = employeeProvider.currentEmployee;
+      if (currentEmployee == null || !currentEmployee.isTecnico) {
+        debugPrint("⚠️ Técnico ainda null ou não é técnico");
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
 
-      debugPrint("✅ Técnico carregado: $tecnicoId - ${employeeProvider.currentEmployee?.name}");
+      final tecnicoId = currentEmployee.id!;
+      debugPrint("✅ Técnico carregado: $tecnicoId - ${currentEmployee.name}");
 
-      // Realtime
+      // Realtime com callback de notificação
       if (!chamadoProvider.jaTemSubscriptionAtiva(tecnicoId)) {
-        chamadoProvider.setupRealtimeParaTecnico(tecnicoId);
+        chamadoProvider.setupRealtimeParaTecnico(
+          tecnicoId,
+          onMudanca: _notificarNovoChamado,
+        );
       }
 
       await Future.wait([
@@ -73,6 +77,30 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     }
   }
 
+  // ==================== NOTIFICAÇÃO SONORA + VISUAL ====================
+  void _notificarNovoChamado() {
+    if (!mounted) return;
+
+    HapticFeedback.heavyImpact();
+    Future.delayed(const Duration(milliseconds: 150), () => HapticFeedback.heavyImpact());
+
+    try {
+      final player = AudioPlayer();
+      player.play(AssetSource('sound/notification.mp3'));
+      debugPrint("🎵 Som de notificação tocado");
+    } catch (e) {
+      debugPrint("❌ Erro ao tocar som: $e");
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("📢 Novo chamado atribuído a você!"),
+        backgroundColor: Colors.orange,
+        duration: Duration(seconds: 4),
+      ),
+    );
+  }
+
   Future<void> _recarregarApenasChamados() async {
     if (!mounted) return;
     final tecnicoId = context.read<EmployeeProvider>().currentEmployee?.id;
@@ -82,28 +110,13 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     if (mounted) setState(() {});
   }
 
-  void _notificarNovoChamado() {
-    HapticFeedback.heavyImpact();
-    Future.delayed(const Duration(milliseconds: 150), () => HapticFeedback.heavyImpact());
-
-    try {
-      final player = AudioPlayer();
-      player.play(AssetSource('sound/notification.mp3'));
-    } catch (_) {}
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("📢 Novo chamado atribuído!"), backgroundColor: Colors.orange),
-      );
-    }
-  }
-
   Future<void> _selecionarData() async {
     final date = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2025),
       lastDate: DateTime(2028),
+      locale: const Locale('pt', 'BR'),
     );
     if (date != null && mounted) {
       setState(() => _selectedDate = date);
@@ -127,13 +140,13 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
     return Consumer<EmployeeProvider>(
       builder: (context, employeeProvider, _) {
         final nomeCompleto = employeeProvider.currentEmployee?.name ?? 'Técnico';
-        debugPrint("🔄 [Consumer Build] Nome final: $nomeCompleto | ID: ${employeeProvider.currentEmployee?.id}");
+        debugPrint("🔄 [Consumer Build] Nome final: $nomeCompleto");
 
         return Scaffold(
           backgroundColor: Colors.grey[50],
           appBar: AppBar(
             backgroundColor: Colors.teal[700],
-            title: Text("Olá, $nomeCompleto", style: const TextStyle(fontWeight: FontWeight.bold)),
+            title: Text("Olá, $nomeCompleto", style: const TextStyle(fontWeight: FontWeight.bold)), // ← Nome completo aqui
             actions: [
               IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _carregarTudo),
               IconButton(
@@ -199,8 +212,8 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
                           for (var servicoId in chamado.servicosIds) {
                             final item = servicosObra.firstWhereOrNull((s) => s['servico_id']?.toString() == servicoId.toString());
                             final status = (item?['status'] ?? 'nao_iniciado').toString().toLowerCase();
-                            if (status == 'concluido') qtdConcluido++;
-                            else if (status == 'pendente') qtdPendente++;
+                            if (status == 'concluido' || status == 'concluído') qtdConcluido++;
+                            else if (status.contains('pendente')) qtdPendente++;
                             else qtdSemAtendimento++;
                           }
 

@@ -297,10 +297,14 @@ class _ChamadoFormScreenState extends State<ChamadoFormScreen> {
                         return FilterChip(
                           label: Text(nome),
                           selected: isSelected,
+                          selectedColor: Colors.teal[100],
+                          checkmarkColor: Colors.teal,
                           onSelected: (selected) {
                             setState(() {
                               if (selected) {
-                                if (!_servicosSelecionados.contains(id)) _servicosSelecionados.add(id);
+                                if (! _servicosSelecionados.contains(id)) {
+                                  _servicosSelecionados.add(id);
+                                }
                               } else {
                                 _servicosSelecionados.remove(id);
                               }

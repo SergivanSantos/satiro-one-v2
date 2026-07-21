@@ -59,15 +59,13 @@ class ChamadoProvider extends ChangeNotifier {
   }
 
   // ==================== REALTIME PARA TÉCNICO ====================
-  void setupRealtimeParaTecnico(int tecnicoId) {
+  void setupRealtimeParaTecnico(int tecnicoId, {VoidCallback? onMudanca}) {
     if (_realtimeAtivo && _tecnicoIdAtual == tecnicoId) return;
 
     _cancelarRealtime();
 
     _tecnicoIdAtual = tecnicoId;
     _realtimeAtivo = true;
-
-    debugPrint("📡 [REALTIME] Iniciando subscription para técnico ID: $tecnicoId");
 
     _realtimeSubscription = supabase
         .from('chamado')
@@ -81,14 +79,9 @@ class ChamadoProvider extends ChangeNotifier {
         } else {
           await carregarChamadosDoTecnico(tecnicoId);
         }
-      },
-      onError: (error) {
-        debugPrint("❌ Erro na subscription Realtime Técnico: $error");
-        _realtimeAtivo = false;
+        onMudanca?.call();   // ← Chama notificação na tela
       },
     );
-
-    debugPrint("✅ [REALTIME] Subscription ATIVA para técnico $tecnicoId");
   }
 
   bool jaTemSubscriptionAtiva(int tecnicoId) {

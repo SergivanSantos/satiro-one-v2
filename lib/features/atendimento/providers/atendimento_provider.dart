@@ -106,4 +106,29 @@ class AtendimentoProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  // Dentro da classe AtendimentoProvider
+
+  String getFotoUrl(String? path) {
+    if (path == null || path.isEmpty) return '';
+
+    // Se já for uma URL completa
+    if (path.startsWith('http')) {
+      // Remove duplicação de "/atendimentos/atendimentos/" se existir
+      return path.replaceAll(
+        'atendimentos/atendimentos/',
+        'atendimentos/',
+      );
+    }
+
+    // Se for apenas o caminho interno
+    try {
+      final supabase = Supabase.instance.client;
+      return supabase.storage.from('atendimentos').getPublicUrl(path);
+    } catch (e) {
+      debugPrint("❌ Erro ao gerar URL: $e");
+      return '';
+    }
+  }
+
 }

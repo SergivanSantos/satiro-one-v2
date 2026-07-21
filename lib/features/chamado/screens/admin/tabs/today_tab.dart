@@ -24,14 +24,19 @@ class TodayTab extends StatefulWidget {
 }
 
 class _TodayTabState extends State<TodayTab> {
+  bool _servicosCarregados = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _carregarServicosDosChamadosHoje());
   }
 
+  // Só carrega serviços quando necessário (evita loop)
   Future<void> _carregarServicosDosChamadosHoje() async {
-    if (!mounted) return;
+    if (!mounted || _servicosCarregados) return;
+
+    setState(() => _servicosCarregados = true);
 
     final chamadoProvider = context.read<ChamadoProvider>();
     final servicoProvider = context.read<ServicoProvider>();
@@ -48,8 +53,11 @@ class _TodayTabState extends State<TodayTab> {
       }).toList();
     }
 
+    // Carrega apenas uma vez por obra
+    final Set<String> obrasProcessadas = {};
     for (var chamado in chamadosHoje) {
-      if (chamado.obraId.isNotEmpty) {
+      if (chamado.obraId.isNotEmpty && !obrasProcessadas.contains(chamado.obraId)) {
+        obrasProcessadas.add(chamado.obraId);
         await servicoProvider.carregarServicosDaObra(chamado.obraId, null);
       }
     }
@@ -61,6 +69,7 @@ class _TodayTabState extends State<TodayTab> {
     final servicoProvider = context.watch<ServicoProvider>();
     final obraProvider = context.watch<ObraProvider>();
 
+    // Recalcula chamados (reage ao realtime)
     var chamadosHoje = chamadoProvider.chamados.where((c) =>
     DateFormat('yyyy-MM-dd').format(c.dataAgendada) ==
         DateFormat('yyyy-MM-dd').format(DateTime.now())).toList();
@@ -104,6 +113,7 @@ class _TodayTabState extends State<TodayTab> {
 
     return Column(
       children: [
+        // Contadores
         Container(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
           color: Colors.grey[100],
@@ -160,8 +170,7 @@ class _TodayTabState extends State<TodayTab> {
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Container(
-        // Largura aumentada conforme solicitado
-        width: 230,   // ← Ajuste aqui se precisar (ex: 220, 240, etc.)
+        width: 230,
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -184,11 +193,7 @@ class _TodayTabState extends State<TodayTab> {
             const SizedBox(height: 8),
             Text(
               count.toString(),
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
+              style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: color),
             ),
           ],
         ),

@@ -127,4 +127,25 @@ class ServicoProvider extends ChangeNotifier {
     _servicosPorObra.clear();
     notifyListeners();
   }
+
+  // Atualiza status de um serviço específico (chamado da tela de execução)
+  Future<bool> atualizarStatusServico(String obraServicoId, String novoStatus) async {
+    try {
+      await _supabase
+          .from('obra_servico')
+          .update({'status': novoStatus})
+          .eq('id', obraServicoId);
+
+      debugPrint("✅ Status do serviço atualizado para: $novoStatus");
+
+      // Recarrega o cache da obra para refletir a mudança
+      // (você pode passar o obraId se tiver)
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint("❌ Erro ao atualizar status do serviço: $e");
+      return false;
+    }
+  }
+
 }
