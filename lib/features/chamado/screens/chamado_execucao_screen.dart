@@ -44,7 +44,8 @@ class _ChamadoExecucaoScreenState extends State<ChamadoExecucaoScreen> {
       debugPrint("🔄 [Execução] Carregando serviços para obra: ${widget.chamado.obraId}");
 
       // Carrega serviços da obra (com join completo)
-      await servicoProvider.carregarServicosDaObra(widget.chamado.obraId);
+
+      await servicoProvider.carregarServicosDaObra(widget.chamado.obraId, null); // null = todas as fases
 
       // Filtra apenas os serviços deste chamado
       _servicosDoChamado = servicoProvider.getServicosDaObra(widget.chamado.obraId)

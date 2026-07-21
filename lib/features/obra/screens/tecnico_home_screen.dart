@@ -56,14 +56,9 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
 
       debugPrint("✅ Técnico carregado: $tecnicoId - ${employeeProvider.currentEmployee?.name}");
 
+      // Realtime
       if (!chamadoProvider.jaTemSubscriptionAtiva(tecnicoId)) {
-        chamadoProvider.setupRealtimeParaTecnico(
-          tecnicoId,
-          onNovoChamado: () {
-            _notificarNovoChamado();
-            _recarregarApenasChamados();
-          },
-        );
+        chamadoProvider.setupRealtimeParaTecnico(tecnicoId);
       }
 
       await Future.wait([
@@ -278,7 +273,7 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
               ListTile(
                 leading: const Icon(Icons.location_on, color: Colors.blue),
                 title: const Text("Endereço da Obra"),
-                subtitle: Text(obra.enderecoCompleto),
+                subtitle: Text(obra.enderecoCompleto ?? 'Não informado'),
               ),
               ListTile(
                 leading: const Icon(Icons.engineering, color: Colors.teal),

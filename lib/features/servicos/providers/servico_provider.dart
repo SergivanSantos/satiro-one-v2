@@ -19,8 +19,6 @@ class ServicoProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      debugPrint("🔄 [ServicoProvider] Iniciando carregamento de serviços globais...");
-
       final response = await _supabase
           .from('servico')
           .select('*, categoria(nome), pops(arquivo_url, titulo)')
@@ -42,14 +40,14 @@ class ServicoProvider extends ChangeNotifier {
     }
   }
 
-  // ==================== SERVIÇOS POR OBRA (MAPA - EVITA SOBRESCREVER) ====================
+  // ==================== SERVIÇOS POR OBRA (CACHE) ====================
   final Map<String, List<Map<String, dynamic>>> _servicosPorObra = {};
 
   List<Map<String, dynamic>> getServicosDaObra(String obraId) {
     return _servicosPorObra[obraId] ?? [];
   }
 
-  Future<void> carregarServicosDaObra(String obraId, {String? faseId}) async {
+  Future<void> carregarServicosDaObra(String obraId, String? faseId) async {
     try {
       debugPrint("🔄 Carregando serviços da obra $obraId | fase: ${faseId ?? 'todas'}");
 
@@ -58,6 +56,7 @@ class ServicoProvider extends ChangeNotifier {
           .select('*, servico(*, categoria(nome), pops(arquivo_url, titulo))')
           .eq('obra_id', obraId);
 
+      // Filtro de fase (se informado)
       if (faseId != null && faseId.isNotEmpty) {
         query = query.eq('fase_id', faseId);
       }
@@ -65,12 +64,13 @@ class ServicoProvider extends ChangeNotifier {
       final res = await query.order('created_at');
 
       _servicosPorObra[obraId] = List.from(res);
-      debugPrint("✅ ${_servicosPorObra[obraId]!.length} serviços carregados para obra $obraId");
+
+      debugPrint("✅ ${_servicosPorObra[obraId]!.length} serviços cacheados para obra $obraId");
+      notifyListeners();
     } catch (e) {
       debugPrint("❌ Erro ao carregar serviços da obra $obraId: $e");
       _servicosPorObra[obraId] = [];
     }
-    notifyListeners();
   }
 
   // ==================== SERVIÇOS POR FASE ====================
@@ -79,8 +79,6 @@ class ServicoProvider extends ChangeNotifier {
 
   Future<void> carregarServicosDaFase(String obraId, String faseId) async {
     try {
-      debugPrint("🔄 Carregando serviços da obra $obraId | fase $faseId");
-
       final res = await _supabase
           .from('obra_servico')
           .select('*, servico(*, categoria(nome), pops(arquivo_url, titulo))')
@@ -89,7 +87,6 @@ class ServicoProvider extends ChangeNotifier {
           .order('created_at');
 
       _servicosDaFase = List.from(res);
-      debugPrint("✅ ${_servicosDaFase.length} serviços carregados para esta fase");
       notifyListeners();
     } catch (e) {
       debugPrint("❌ Erro ao carregar serviços da fase: $e");
@@ -119,5 +116,15 @@ class ServicoProvider extends ChangeNotifier {
 
   Future<void> refresh() async {
     await carregarServicos();
+  }
+
+  void limparCacheObra(String obraId) {
+    _servicosPorObra.remove(obraId);
+    notifyListeners();
+  }
+
+  void limparTodoCache() {
+    _servicosPorObra.clear();
+    notifyListeners();
   }
 }

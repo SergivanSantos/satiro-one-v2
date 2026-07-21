@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../../../../obra/providers/obra_provider.dart';
 import '../../../../servicos/screens/obra_servico_form_screen.dart';
+import '../../../../obra/models/obra.dart';
+
 import '../../../models/chamado.dart';
 import '../../../providers/chamado_provider.dart';
 import '../../../../rh/providers/employee_provider.dart';
@@ -16,8 +18,14 @@ import '../../chamado_form_screen.dart';
 class ChamadoCard extends StatelessWidget {
   final Chamado chamado;
   final VoidCallback onRefresh;
+  final VoidCallback? onDelete;
 
-  const ChamadoCard({super.key, required this.chamado, required this.onRefresh});
+  const ChamadoCard({
+    super.key,
+    required this.chamado,
+    required this.onRefresh,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -29,66 +37,75 @@ class ChamadoCard extends StatelessWidget {
     final obra = obraProvider.obras.firstWhereOrNull((o) => o.id == chamado.obraId);
     final cliente = clienteProvider.clientes.firstWhereOrNull((c) => c.id == obra?.clienteId);
 
-    final obraNome = obra?.nome ?? chamado.obraNome ?? 'Obra';
-    final clienteNome = cliente?.nome ?? chamado.clienteNome ?? '—';
+    final obraNome = obra?.nome ?? chamado.obraNome ?? 'Obra sem nome';
+    final clienteNome = cliente?.nome ?? chamado.clienteNome ?? 'Cliente não encontrado';
 
-    // === NOME DA ORDEM DE SERVIÇO ===
-    // === NOME DA ORDEM DE SERVIÇO ===
+    // Nome da fase / Ordem de Serviço
     String faseNome = "Sem fase definida";
-
     if (chamado.ordemServicoId.isNotEmpty) {
-      final ordem = ordemProvider.ordens.firstWhereOrNull(
-            (o) => o.id == chamado.ordemServicoId,
-      );
-      if (ordem != null) {
+      final ordem = ordemProvider.ordens.firstWhereOrNull((o) => o.id == chamado.ordemServicoId);
+      if (ordem != null && ordem.titulo.isNotEmpty) {
         faseNome = ordem.titulo;
-      } else {
-        debugPrint("⚠️ Ordem não encontrada: ${chamado.ordemServicoId}");
       }
     }
 
-    // Contagem de serviços
+    // Contagem de serviços (apenas os do chamado)
     final servicosObra = servicoProvider.getServicosDaObra(chamado.obraId);
     int qtdConcluido = 0, qtdPendente = 0, qtdNaoIniciado = 0;
 
     for (var servicoId in chamado.servicosIds) {
       final servicoObra = servicosObra.firstWhereOrNull(
-            (s) => s['servico_id']?.toString() == servicoId.toString(),
+            (s) => (s['servico_id']?.toString() ?? '') == servicoId.toString(),
       );
-      final status = (servicoObra?['status'] ?? 'nao_iniciado').toString().toLowerCase();
 
-      if (status == 'concluido') qtdConcluido++;
-      else if (status == 'pendente') qtdPendente++;
-      else qtdNaoIniciado++;
+      final status = (servicoObra?['status'] ?? 'nao_iniciado')
+          .toString()
+          .toLowerCase()
+          .trim();
+
+      if (status == 'concluido' || status == 'concluído') {
+        qtdConcluido++;
+      } else if (status.contains('pendente')) {
+        qtdPendente++;
+      } else {
+        qtdNaoIniciado++;
+      }
     }
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 8),
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         onTap: () => _mostrarServicos(context),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Icon(Icons.business, color: Colors.teal, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       "$obraNome - $clienteNome",
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15.5),
                     ),
                   ),
+
+                  // Ações
                   IconButton(
                     icon: const Icon(Icons.person_add_alt_1, color: Colors.blue, size: 22),
                     tooltip: "Alterar Técnico",
                     onPressed: () => _alterarTecnico(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
+                  const SizedBox(width: 12),
+
                   IconButton(
                     icon: const Icon(Icons.edit, color: Colors.orange, size: 22),
                     tooltip: "Editar Chamado",
@@ -96,23 +113,33 @@ class ChamadoCard extends StatelessWidget {
                       context,
                       MaterialPageRoute(builder: (_) => ChamadoFormScreen(chamado: chamado)),
                     ).then((_) => onRefresh()),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                   ),
+                  const SizedBox(width: 12),
+
+                  if (onDelete != null)
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 22),
+                      tooltip: "Excluir Chamado",
+                      onPressed: onDelete,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
                 ],
               ),
 
-              const SizedBox(height: 4),
-
+              const SizedBox(height: 2),
               Text(
                 faseNome,
-                style: TextStyle(fontSize: 13.5, color: Colors.grey[700], fontWeight: FontWeight.w500),
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
               ),
 
               const SizedBox(height: 6),
-
               Row(
                 children: [
                   const Icon(Icons.engineering, color: Colors.blueGrey, size: 18),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Text(
                     chamado.tecnicoNome ?? 'Não atribuído',
                     style: TextStyle(fontSize: 14, color: Colors.grey[700]),
@@ -120,14 +147,14 @@ class ChamadoCard extends StatelessWidget {
                 ],
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
 
               Row(
                 children: [
                   _buildCounter(Icons.check_circle, Colors.green, qtdConcluido),
-                  const SizedBox(width: 20),
+                  const SizedBox(width: 16),
                   _buildCounter(Icons.warning_amber, Colors.orange, qtdPendente),
-                  const SizedBox(width: 20),
+                  const SizedBox(width: 16),
                   _buildCounter(Icons.access_time, Colors.blueGrey, qtdNaoIniciado),
                 ],
               ),
@@ -142,9 +169,12 @@ class ChamadoCard extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: color, size: 18),
+        Icon(icon, color: color, size: 17),
         const SizedBox(width: 4),
-        Text(count.toString(), style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+        Text(
+          count.toString(),
+          style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14),
+        ),
       ],
     );
   }
@@ -152,22 +182,22 @@ class ChamadoCard extends StatelessWidget {
   void _mostrarServicos(BuildContext context) async {
     final servicoProvider = context.read<ServicoProvider>();
 
-    // Garante que os serviços da obra estão carregados
     if (chamado.obraId.isNotEmpty) {
-      await servicoProvider.carregarServicosDaObra(chamado.obraId,); // faseId vazio = todos
+      await servicoProvider.carregarServicosDaObra(chamado.obraId, null);
     }
 
     final servicosObra = servicoProvider.getServicosDaObra(chamado.obraId);
     final servicosGlobais = servicoProvider.servicos;
 
-    debugPrint("🔍 Popup Serviços - Chamado: ${chamado.id}");
-    debugPrint("   ServicosIds: ${chamado.servicosIds}");
-    debugPrint("   Serviços da Obra encontrados: ${servicosObra.length}");
+    // Use o mesmo cálculo que já existe no build
+    final obraProvider = context.read<ObraProvider>();
+    final obra = obraProvider.obras.firstWhereOrNull((o) => o.id == chamado.obraId);
+    final obraNomeParaPopup = obra?.nome ?? chamado.obraNome ?? 'Obra';
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("Serviços - ${chamado.obraNome ?? 'Obra'}"),
+        title: Text("Serviços - $obraNomeParaPopup"),
         content: SizedBox(
           width: double.maxFinite,
           height: 480,
@@ -180,7 +210,7 @@ class ChamadoCard extends StatelessWidget {
               final servicoId = chamado.servicosIds[index];
 
               final item = servicosObra.firstWhereOrNull(
-                    (s) => s['servico_id']?.toString() == servicoId.toString(),
+                    (s) => (s['servico_id']?.toString() ?? '') == servicoId.toString(),
               );
 
               final servicoGlobal = servicosGlobais.firstWhereOrNull((s) => s.id == servicoId);
@@ -189,9 +219,9 @@ class ChamadoCard extends StatelessWidget {
                   servicoGlobal?.nome ??
                   'Serviço desconhecido';
 
-              final observacoes = (item?['observacoes'] ??
-                  item?['observacao'] ??
-                  '').toString().trim();
+              final observacoes = (item?['observacoes'] ?? item?['observacao'] ?? '')
+                  .toString()
+                  .trim();
 
               final statusRaw = (item?['status'] ?? 'nao_iniciado').toString().toLowerCase();
 
@@ -199,17 +229,15 @@ class ChamadoCard extends StatelessWidget {
               Color statusColor = Colors.blueGrey;
               IconData statusIcon = Icons.access_time;
 
-              if (statusRaw == 'concluido') {
+              if (statusRaw == 'concluido' || statusRaw == 'concluído') {
                 statusText = 'Concluído';
                 statusColor = Colors.green;
                 statusIcon = Icons.check_circle;
-              } else if (statusRaw == 'pendente') {
+              } else if (statusRaw.contains('pendente')) {
                 statusText = 'Pendente';
                 statusColor = Colors.orange;
                 statusIcon = Icons.warning_amber;
               }
-
-              debugPrint("   → Serviço: $nome | Observações: '$observacoes'");
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),

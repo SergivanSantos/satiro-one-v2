@@ -12,9 +12,11 @@ class ChamadoProvider extends ChangeNotifier {
 
   final supabase = Supabase.instance.client;
 
+  // Realtime
   StreamSubscription<List<Map<String, dynamic>>>? _realtimeSubscription;
   int? _tecnicoIdAtual;
   bool _realtimeAtivo = false;
+  bool _realtimeGeralAtivo = false;
 
   DateTime? _ultimaDataCarregada;
 
@@ -56,12 +58,9 @@ class ChamadoProvider extends ChangeNotifier {
     }
   }
 
-  // ==================== REALTIME ====================
-  void setupRealtimeParaTecnico(int tecnicoId, {required VoidCallback onNovoChamado}) {
-    if (_realtimeAtivo && _tecnicoIdAtual == tecnicoId) {
-      debugPrint("📡 [REALTIME] Já ativo para técnico $tecnicoId");
-      return;
-    }
+  // ==================== REALTIME PARA TÉCNICO ====================
+  void setupRealtimeParaTecnico(int tecnicoId) {
+    if (_realtimeAtivo && _tecnicoIdAtual == tecnicoId) return;
 
     _cancelarRealtime();
 
@@ -76,40 +75,63 @@ class ChamadoProvider extends ChangeNotifier {
         .eq('tecnico_id', tecnicoId)
         .listen(
           (payload) async {
-        debugPrint("🔔 [REALTIME] Mudança detectada! (${payload.length} registros) - Recarregando lista...");
-        try {
-          if (_ultimaDataCarregada != null) {
-            await carregarChamadosDoTecnico(tecnicoId, data: _ultimaDataCarregada);
-          } else {
-            await carregarChamadosDoTecnico(tecnicoId);
-          }
-          onNovoChamado();
-        } catch (e) {
-          debugPrint("❌ Erro no realtime callback: $e");
+        debugPrint("🔔 [REALTIME Técnico] Mudança detectada! (${payload.length} registros)");
+        if (_ultimaDataCarregada != null) {
+          await carregarChamadosDoTecnico(tecnicoId, data: _ultimaDataCarregada);
+        } else {
+          await carregarChamadosDoTecnico(tecnicoId);
         }
       },
       onError: (error) {
-        debugPrint("❌ Erro na subscription Realtime: $error");
+        debugPrint("❌ Erro na subscription Realtime Técnico: $error");
         _realtimeAtivo = false;
       },
     );
 
-    debugPrint("✅ [REALTIME] Subscription ATIVA");
+    debugPrint("✅ [REALTIME] Subscription ATIVA para técnico $tecnicoId");
+  }
+
+  bool jaTemSubscriptionAtiva(int tecnicoId) {
+    return _realtimeAtivo && _tecnicoIdAtual == tecnicoId;
+  }
+
+  // ==================== REALTIME GERAL (para Admin / Tela Hoje) ====================
+  void setupRealtimeGeral() {
+    if (_realtimeGeralAtivo) return;
+
+    _cancelarRealtime();
+
+    _realtimeGeralAtivo = true;
+
+    debugPrint("📡 [REALTIME GERAL] Iniciando subscription para todos os chamados...");
+
+    _realtimeSubscription = supabase
+        .from('chamado')
+        .stream(primaryKey: ['id'])
+        .listen(
+          (payload) async {
+        debugPrint("🔔 [REALTIME GERAL] Mudança detectada! (${payload.length} registros) - Recarregando lista...");
+        await carregarTodosChamados();
+      },
+      onError: (error) {
+        debugPrint("❌ Erro na subscription Realtime Geral: $error");
+        _realtimeGeralAtivo = false;
+      },
+    );
+
+    debugPrint("✅ [REALTIME GERAL] Subscription ATIVA");
   }
 
   void _cancelarRealtime() {
     _realtimeSubscription?.cancel();
     _realtimeSubscription = null;
     _realtimeAtivo = false;
+    _realtimeGeralAtivo = false;
+    _tecnicoIdAtual = null;
   }
 
   void disposeRealtime() {
     _cancelarRealtime();
-    _tecnicoIdAtual = null;
-  }
-
-  bool jaTemSubscriptionAtiva(int tecnicoId) {
-    return _realtimeAtivo && _tecnicoIdAtual == tecnicoId;
   }
 
   // ==================== ADMIN ====================
