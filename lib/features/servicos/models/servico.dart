@@ -26,7 +26,7 @@ class Servico {
   });
 
   factory Servico.fromMap(Map<String, dynamic> map) {
-    final popData = map['pops'] as Map<String, dynamic>?;   // ← Corrigido (plural)
+    final popData = map['pop'] as Map<String, dynamic>?;   // ← Corrigido (plural)
     final categoriaData = map['categoria'] as Map<String, dynamic>?;
 
     return Servico(
