@@ -123,7 +123,7 @@ class _ChamadoListAdminScreenState extends State<ChamadoListAdminScreen> {
               child: TabBarView(
                 children: [
                   TodayTab(onRefresh: _carregarDados, filialId: _selectedFilialId),
-                  const WeekTab(),
+                  WeekTab(filialId: _selectedFilialId),           // ← Semana com filtro
                   ByTechnicianTab(onRefresh: _carregarDados, filialId: _selectedFilialId),
                   const ByObraTab(),
                   PendentesTab(onRefresh: _carregarDados, filialId: _selectedFilialId),

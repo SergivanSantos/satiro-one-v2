@@ -40,12 +40,14 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
       _role = widget.employee!.role;
       _isActive = widget.employee!.isActive;
     } else {
-      _passwordController.text = '123456'; // Senha padrão
+      _passwordController.text = '123456'; // Senha padrão para novos usuários
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<EmployeeProvider>();
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.employee == null ? "Novo Funcionário" : "Editar Funcionário"),
@@ -57,6 +59,22 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
+              // Erro geral (ex: CPF duplicado)
+              if (provider.errorMessage != null)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.red[50],
+                    border: Border.all(color: Colors.red),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    provider.errorMessage!,
+                    style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w500),
+                  ),
+                ),
+
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(labelText: "Nome Completo *", border: OutlineInputBorder()),
@@ -100,7 +118,8 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
 
               TextFormField(
                 controller: _cpfController,
-                decoration: const InputDecoration(labelText: "CPF", border: OutlineInputBorder()),
+                decoration: const InputDecoration(labelText: "CPF *", border: OutlineInputBorder()),
+                validator: (value) => (value?.trim().isEmpty ?? true) ? "CPF obrigatório" : null,
               ),
               const SizedBox(height: 16),
 
@@ -167,22 +186,26 @@ class _EmployeeFormScreenState extends State<EmployeeFormScreen> {
     final provider = context.read<EmployeeProvider>();
     final password = widget.employee == null ? _passwordController.text.trim() : null;
 
-    final success = await provider.saveEmployee(employee, password: password);
+    final error = await provider.saveEmployee(employee, password: password);
 
-    if (success && mounted) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(widget.employee == null
-              ? "Funcionário cadastrado e usuário criado no Authentication!"
-              : "Funcionário atualizado!"),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Erro ao salvar funcionário"), backgroundColor: Colors.red),
-      );
+    if (mounted) {
+      if (error == null) {
+        // Sucesso
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(widget.employee == null
+                ? "Funcionário cadastrado com sucesso!"
+                : "Funcionário atualizado com sucesso!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        // Erro específico (já mostrado no Container vermelho acima)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error), backgroundColor: Colors.red),
+        );
+      }
     }
 
     setState(() => _isLoading = false);

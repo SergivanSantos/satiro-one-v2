@@ -62,15 +62,24 @@ class _ChamadoFormScreenState extends State<ChamadoFormScreen> {
   }
 
   Future<void> _selecionarData() async {
+    final DateTime initial = _dataAgendada.isBefore(DateTime.now())
+        ? DateTime.now().add(const Duration(days: 1))
+        : _dataAgendada;
+
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: _dataAgendada,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 90)),
+      initialDate: initial,
+      firstDate: DateTime.now(),                    // ← Não permite datas passadas
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: "Data Agendada",
+      cancelText: "Cancelar",
+      confirmText: "Confirmar",
     );
 
     if (picked != null && picked != _dataAgendada) {
-      setState(() => _dataAgendada = picked);
+      setState(() {
+        _dataAgendada = picked;
+      });
     }
   }
 

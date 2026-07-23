@@ -67,24 +67,17 @@ class Obra {
   });
 
   factory Obra.fromMap(Map<String, dynamic> map) {
-    final faseAtualData = map['fase_atual'] as Map<String, dynamic>?;
     final faseAtualId = map['fase_atual_id']?.toString();
 
-    debugPrint("🔍 fromMap - Obra: ${map['nome']} | Fase Atual ID: $faseAtualId");
-
     final obraFaseList = map['obra_fase'] as List<dynamic>? ?? [];
-    debugPrint("   → Encontradas ${obraFaseList.length} fases na obra_fase");
 
     Map<String, dynamic>? obraFaseAtual;
 
     for (var item in obraFaseList) {
       if (item is Map<String, dynamic>) {
         final faseIdDoItem = item['fase_id']?.toString();
-        debugPrint("   → Analisando fase_id: $faseIdDoItem (queremos $faseAtualId)");
-
         if (faseIdDoItem == faseAtualId) {
           obraFaseAtual = item;
-          debugPrint("   ✅ Encontrada a fase atual!");
           break;
         }
       }
@@ -92,12 +85,7 @@ class Obra {
 
     if (obraFaseAtual == null && obraFaseList.isNotEmpty) {
       obraFaseAtual = obraFaseList.first as Map<String, dynamic>?;
-      debugPrint("   ⚠️ Não encontrou fase atual, usando a primeira da lista");
     }
-
-    final dataFim = obraFaseAtual?['data_fim_prevista'] != null
-        ? DateTime.tryParse(obraFaseAtual!['data_fim_prevista'].toString())
-        : null;
 
     return Obra(
       id: map['id']?.toString() ?? '',
@@ -111,11 +99,9 @@ class Obra {
       status: (map['status']?.toString() ?? 'em_andamento').toLowerCase(),
       usaFases: map['usa_fases'] == true || map['usa_fases'] == 'true' || map['usa_fases'] == 1,
 
-      // Responsável
       responsavelNome: map['responsavel_nome']?.toString(),
       responsavelContato: map['responsavel_contato']?.toString(),
 
-      // Endereço da Obra
       rua: map['rua']?.toString(),
       numero: map['numero']?.toString(),
       bairro: map['bairro']?.toString(),
@@ -124,7 +110,7 @@ class Obra {
       complemento: map['complemento']?.toString(),
 
       faseAtualId: faseAtualId,
-      faseAtualNome: faseAtualData?['nome']?.toString() ?? map['fase_atual_nome']?.toString(),
+      faseAtualNome: map['fase_atual']?['nome']?.toString() ?? map['fase_atual_nome']?.toString(),
 
       dataUltimaMudancaFase: map['data_ultima_mudanca_fase'] != null
           ? DateTime.tryParse(map['data_ultima_mudanca_fase'].toString())
@@ -134,7 +120,9 @@ class Obra {
       dataInicioPrevistaFase: obraFaseAtual?['data_inicio_prevista'] != null
           ? DateTime.tryParse(obraFaseAtual!['data_inicio_prevista'].toString())
           : null,
-      dataFimPrevistaFase: dataFim,
+      dataFimPrevistaFase: obraFaseAtual?['data_fim_prevista'] != null
+          ? DateTime.tryParse(obraFaseAtual!['data_fim_prevista'].toString())
+          : null,
       dataInicioRealFase: obraFaseAtual?['data_inicio_real'] != null
           ? DateTime.tryParse(obraFaseAtual!['data_inicio_real'].toString())
           : null,

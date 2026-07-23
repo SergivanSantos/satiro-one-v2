@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../backup/providers/backup_provider.dart';
 import '../../backup/screens/obra_backup_history_screen.dart';
@@ -175,6 +176,9 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
   }
 
   Widget _buildInformacoesTab(ObraProvider provider) {
+    final responsavelNome = widget.obra.responsavelNome ?? 'Não informado';
+    final responsavelTelefone = widget.obra.responsavelContato ?? '';
+
     final arquitetoNome = provider.getArquitetoNome(widget.obra.arquitetoId) ?? 'Não informado';
     final construtoraNome = provider.getConstrutoraNome(widget.obra.construtoraId) ?? 'Não informado';
 
@@ -191,7 +195,7 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
                 children: [
                   _infoRow(Icons.calendar_today, "Data de Início",
                       widget.obra.dataInicio != null
-                          ? "${widget.obra.dataInicio!.day.toString().padLeft(2,'0')}/${widget.obra.dataInicio!.month.toString().padLeft(2,'0')}/${widget.obra.dataInicio!.year}"
+                          ? DateFormat('dd/MM/yyyy').format(widget.obra.dataInicio!)
                           : 'Não informada'),
 
                   _infoRow(Icons.flag, "Fase Atual", widget.obra.faseAtualDisplay),
@@ -202,8 +206,43 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
                             "por ${widget.obra.responsavelUltimaMudanca ?? '—'}"),
 
                   _infoRow(Icons.info_outline, "Status", widget.obra.status.toUpperCase()),
-                  _infoRow(Icons.person_outline, "Arquiteto", arquitetoNome),
-                  _infoRow(Icons.business, "Construtora", construtoraNome),
+
+                  const Divider(height: 32),
+
+                  // === RESPONSÁVEL DA OBRA (COM BOTÃO DE EDITAR) ===
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _infoRowWithContact(
+                          Icons.person,
+                          "Responsável da Obra",
+                          responsavelNome,
+                          responsavelTelefone,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.teal),
+                        tooltip: "Editar Responsável",
+                        onPressed: () => _editarResponsavelObra(context),
+                      ),
+                    ],
+                  ),
+
+                  // Arquiteto
+                  _infoRowWithContact(
+                    Icons.architecture,
+                    "Arquiteto",
+                    arquitetoNome,
+                    provider.getArquitetoTelefone(widget.obra.arquitetoId),
+                  ),
+
+                  // Construtora
+                  _infoRowWithContact(
+                    Icons.business,
+                    "Construtora",
+                    construtoraNome,
+                    provider.getConstrutoraTelefone(widget.obra.construtoraId),
+                  ),
                 ],
               ),
             ),
@@ -211,6 +250,62 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
         ],
       ),
     );
+  }
+
+
+  Widget _infoRowWithContact(IconData icon, String label, String nome, String telefone) {
+    final hasPhone = telefone.isNotEmpty && telefone.length >= 8;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.teal, size: 26),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 13.5, color: Colors.grey)),
+                Text(nome, style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w500)),                  if (hasPhone)
+                  GestureDetector(
+                    onTap: () => _abrirWhatsApp(telefone),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.phone, color: Colors.green, size: 18),  // ← Alterado
+                        const SizedBox(width: 6),
+                        Text(
+                          telefone,
+                          style: const TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.w500,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _abrirWhatsApp(String telefone) async {
+    final clean = telefone.replaceAll(RegExp(r'[^0-9]'), '');
+    final url = Uri.parse("https://wa.me/55$clean");
+
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Não foi possível abrir o WhatsApp")),
+        );
+      }
+    }
   }
 
   // ==================== ALTERAR FASE (COM ORDEM CORRETA) ====================
@@ -277,6 +372,78 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
         ),
       ),
     );
+  }
+
+
+  Future<void> _editarResponsavelObra(BuildContext context) async {
+    final nomeController = TextEditingController(text: widget.obra.responsavelNome);
+    final contatoController = TextEditingController(text: widget.obra.responsavelContato);
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Editar Responsável da Obra"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nomeController,
+              decoration: const InputDecoration(labelText: "Nome do Responsável"),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: contatoController,
+              decoration: const InputDecoration(labelText: "Telefone / WhatsApp"),
+              keyboardType: TextInputType.phone,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context, {
+                'nome': nomeController.text.trim(),
+                'contato': contatoController.text.trim(),
+              });
+            },
+            child: const Text("Salvar", style: TextStyle(color: Colors.teal)),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null || !mounted) return;
+
+    final supabase = Supabase.instance.client;
+
+    try {
+      await supabase.from('obra').update({
+        'responsavel_nome': result['nome'],
+        'responsavel_contato': result['contato'],
+      }).eq('id', widget.obra.id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("✅ Responsável atualizado com sucesso!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Recarrega os dados
+        context.read<ObraProvider>().loadObras();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erro ao atualizar: $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _salvarMudancaFase(Map<String, dynamic> novaFase) async {

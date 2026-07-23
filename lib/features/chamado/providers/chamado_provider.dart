@@ -1,9 +1,11 @@
 // lib/features/chamado/providers/chamado_provider.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 
+import '../../rh/providers/employee_provider.dart';
 import '../models/chamado.dart';
 
 class ChamadoProvider extends ChangeNotifier {
@@ -207,6 +209,37 @@ class ChamadoProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint("❌ Erro ao excluir: $e");
       return false;
+    }
+  }
+
+  // ==================== CHAMADOS DA SEMANA ====================
+  List<Chamado> _chamadosDaSemana = [];
+  List<Chamado> get chamadosDaSemana => _chamadosDaSemana;
+
+  Future<void> carregarChamadosDaSemana(DateTime startOfWeek, {int? tecnicoId}) async {
+    try {
+      final endOfWeek = startOfWeek.add(const Duration(days: 6));
+
+      var query = supabase
+          .from('chamado')
+          .select('*, obra:obra_id(nome), tecnico:tecnico_id(name)')
+          .gte('data_agendada', startOfWeek.toIso8601String().split('T')[0])
+          .lte('data_agendada', endOfWeek.toIso8601String().split('T')[0]);
+
+      if (tecnicoId != null) {
+        query = query.eq('tecnico_id', tecnicoId);
+      }
+
+      final res = await query.order('data_agendada', ascending: true);
+
+      _chamadosDaSemana = res.map<Chamado>((json) => Chamado.fromMap(json)).toList();
+
+      debugPrint("✅ ${_chamadosDaSemana.length} chamados carregados da semana");
+      notifyListeners();
+    } catch (e) {
+      debugPrint("❌ Erro ao carregar chamados da semana: $e");
+      _chamadosDaSemana = [];
+      notifyListeners();
     }
   }
 

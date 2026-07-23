@@ -19,6 +19,7 @@ class ObraProvider extends ChangeNotifier {
   final Map<String, String> _construtoraNomes = {};
   final Map<String, String> _filialNomes = {};
 
+
   String getClienteNome(String? id) => _clienteNomes[id] ?? id ?? 'Não informado';
   String getArquitetoNome(String? id) => _arquitetoNomes[id] ?? id ?? 'Não informado';
   String getConstrutoraNome(String? id) => _construtoraNomes[id] ?? id ?? 'Não informado';
@@ -63,34 +64,44 @@ class ObraProvider extends ChangeNotifier {
 
   Future<void> _carregarNomesClientesEParceiros() async {
     try {
+      // Clientes
       final clientes = await _supabase.from('clientes').select('id, nome');
       _clienteNomes.clear();
       for (var c in clientes) {
         _clienteNomes[c['id']] = c['nome'] ?? 'Sem nome';
       }
 
-      final arquitetos = await _supabase.from('arquitetos').select('id, nome');
+      // Arquitetos com telefone
+      final arquitetos = await _supabase.from('arquitetos').select('id, nome, telefone');
       _arquitetoNomes.clear();
+      _arquitetoTelefones.clear();
       for (var a in arquitetos) {
         _arquitetoNomes[a['id']] = a['nome'] ?? 'Sem nome';
+        _arquitetoTelefones[a['id']] = a['telefone'] ?? '';
       }
 
-      final construtoras = await _supabase.from('construtoras').select('id, nome');
+      // Construtoras com telefone
+      final construtoras = await _supabase.from('construtoras').select('id, nome, telefone');
       _construtoraNomes.clear();
+      _construtoraTelefones.clear();
       for (var c in construtoras) {
         _construtoraNomes[c['id']] = c['nome'] ?? 'Sem nome';
+        _construtoraTelefones[c['id']] = c['telefone'] ?? '';
       }
 
+      // Filiais (importante!)
       final filiais = await _supabase.from('filiais').select('id, nome');
       _filialNomes.clear();
       for (var f in filiais) {
         _filialNomes[f['id']] = f['nome'] ?? 'Sem nome';
       }
 
-      debugPrint("✅ ${_filialNomes.length} filiais carregadas no cache");
+      debugPrint("✅ Parceiros carregados: ${_arquitetoNomes.length} arquitetos, "
+          "${_construtoraNomes.length} construtoras, ${_filialNomes.length} filiais");
+
       notifyListeners();
     } catch (e) {
-      debugPrint("⚠️ Erro ao carregar nomes: $e");
+      debugPrint("⚠️ Erro ao carregar nomes e telefones: $e");
     }
   }
 
@@ -157,4 +168,19 @@ class ObraProvider extends ChangeNotifier {
         .where((c) => c['id'] != null && ids.add(c['id']!))
         .toList();
   }
+
+  // Cache de telefones
+  final Map<String, String> _arquitetoTelefones = {};
+  final Map<String, String> _construtoraTelefones = {};
+
+  String getArquitetoTelefone(String? id) {
+    if (id == null || id.isEmpty) return 'Não informado';
+    return _arquitetoTelefones[id] ?? 'Não informado';
+  }
+
+  String getConstrutoraTelefone(String? id) {
+    if (id == null || id.isEmpty) return 'Não informado';
+    return _construtoraTelefones[id] ?? 'Não informado';
+  }
+
 }

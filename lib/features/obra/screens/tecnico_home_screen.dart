@@ -6,6 +6,9 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+
+
 
 import '../../rh/providers/employee_provider.dart';
 import '../../chamado/providers/chamado_provider.dart';
@@ -265,6 +268,15 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
   }
 
   void _mostrarInfoObra(BuildContext context, Obra? obra, dynamic cliente) {
+    if (obra == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Obra não encontrada")),
+      );
+      return;
+    }
+
+    final obraProvider = context.read<ObraProvider>();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -278,41 +290,82 @@ class _TecnicoHomeScreenState extends State<TecnicoHomeScreen> {
             const Text("Informações da Obra", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
 
-            if (cliente != null) ...[
-              ListTile(leading: const Icon(Icons.person), title: const Text("Cliente"), subtitle: Text(cliente.nome ?? '—')),
-            ],
+            if (cliente != null)
+              ListTile(
+                leading: const Icon(Icons.person),
+                title: const Text("Cliente"),
+                subtitle: Text(cliente.nome ?? '—'),
+              ),
 
-            if (obra != null) ...[
-              ListTile(
-                leading: const Icon(Icons.location_on, color: Colors.blue),
-                title: const Text("Endereço da Obra"),
-                subtitle: Text(obra.enderecoCompleto ?? 'Não informado'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.engineering, color: Colors.teal),
-                title: const Text("Responsável"),
-                subtitle: Text(obra.responsavelNome ?? 'Não informado'),
-              ),
-              if (obra.responsavelContato != null && obra.responsavelContato!.isNotEmpty)
-                ListTile(
-                  leading: const Icon(Icons.phone, color: Colors.green),
-                  title: const Text("Contato / WhatsApp"),
-                  subtitle: Text(obra.responsavelContato!),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.message, color: Colors.green, size: 28),
-                    onPressed: () async {
-                      final numero = obra.responsavelContato!.replaceAll(RegExp(r'[^0-9]'), '');
-                      final url = Uri.parse("https://wa.me/$numero");
-                      if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
-                    },
-                  ),
-                ),
-            ],
+            ListTile(
+              leading: const Icon(Icons.location_on, color: Colors.blue),
+              title: const Text("Endereço"),
+              subtitle: Text(obra.enderecoCompleto),
+            ),
+
+            const Divider(),
+
+            // Responsável
+            _buildContactTile(
+              Icons.person,
+              "Responsável",
+              obra.responsavelNome ?? 'Não informado',
+              obra.responsavelContato,
+            ),
+
+            // Arquiteto
+            _buildContactTile(
+              Icons.architecture,
+              "Arquiteto",
+              obraProvider.getArquitetoNome(obra.arquitetoId),
+              obraProvider.getArquitetoTelefone(obra.arquitetoId),
+            ),
+
+            // Construtora
+            _buildContactTile(
+              Icons.business,
+              "Construtora",
+              obraProvider.getConstrutoraNome(obra.construtoraId),
+              obraProvider.getConstrutoraTelefone(obra.construtoraId),
+            ),
+
             const SizedBox(height: 20),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildContactTile(IconData icon, String label, String nome, String? telefone) {
+    final hasPhone = telefone != null && telefone.isNotEmpty && telefone.length >= 8;
+
+    return ListTile(
+      leading: Icon(icon, color: Colors.teal),
+      title: Text(label),
+      subtitle: Text(nome),
+      trailing: hasPhone
+          ? IconButton(
+        icon: const FaIcon(FontAwesomeIcons.whatsapp, color: Colors.green, size: 28),
+
+        onPressed: () => _abrirWhatsApp(telefone!),
+      )
+          : null,
+    );
+  }
+
+  void _abrirWhatsApp(String telefone) async {
+    final clean = telefone.replaceAll(RegExp(r'[^0-9]'), '');
+    final url = Uri.parse("https://wa.me/55$clean");
+
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Não foi possível abrir o WhatsApp")),
+        );
+      }
+    }
   }
 
   Widget _buildStatusChip(IconData icon, Color color, int count) {

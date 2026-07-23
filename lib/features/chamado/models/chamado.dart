@@ -65,6 +65,8 @@ class Chamado {
       observacoesGerais: map['observacoes_gerais'],
       createdAt: DateTime.tryParse(map['created_at'] ?? '') ?? DateTime.now(),
 
+
+
       obraNome: map['obra']?['nome'],
       clienteNome: map['obra']?['cliente']?['nome'],
       tecnicoNome: map['tecnico']?['name'],

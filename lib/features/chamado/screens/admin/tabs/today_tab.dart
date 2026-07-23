@@ -2,12 +2,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart';
 
+import '../../../../obra/models/obra.dart';
 import '../../../../obra/providers/obra_provider.dart';
 import '../../../../servicos/screens/obra_servico_form_screen.dart';
+import '../../../models/chamado.dart';
 import '../../../providers/chamado_provider.dart';
 import '../../../../servicos/providers/servico_provider.dart';
 import '../widgets/chamado_card.dart';
+import '../widgets/servico_popup.dart';
 
 class TodayTab extends StatefulWidget {
   final VoidCallback onRefresh;
@@ -24,55 +28,70 @@ class TodayTab extends StatefulWidget {
 }
 
 class _TodayTabState extends State<TodayTab> {
-  bool _servicosCarregados = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _carregarServicosDosChamadosHoje());
+    // Atualização automática suave após 700ms
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 700), () {
+        if (mounted) _loadTodayData(showLoading: false);
+      });
+    });
   }
 
-  // Só carrega serviços quando necessário (evita loop)
-  Future<void> _carregarServicosDosChamadosHoje() async {
-    if (!mounted || _servicosCarregados) return;
+  Future<void> _loadTodayData({bool showLoading = true}) async {
+    if (!mounted) return;
 
-    setState(() => _servicosCarregados = true);
+    if (showLoading) setState(() => _isLoading = true);
 
-    final chamadoProvider = context.read<ChamadoProvider>();
-    final servicoProvider = context.read<ServicoProvider>();
-    final obraProvider = context.read<ObraProvider>();
+    try {
+      final chamadoProvider = context.read<ChamadoProvider>();
+      final servicoProvider = context.read<ServicoProvider>();
+      final obraProvider = context.read<ObraProvider>();
 
-    var chamadosHoje = chamadoProvider.chamados.where((c) =>
-    DateFormat('yyyy-MM-dd').format(c.dataAgendada) ==
-        DateFormat('yyyy-MM-dd').format(DateTime.now())).toList();
+      await chamadoProvider.carregarTodosChamados();
 
-    if (widget.filialId != null) {
-      chamadosHoje = chamadosHoje.where((c) {
-        final obra = obraProvider.obras.firstWhereOrNull((o) => o.id == c.obraId);
-        return obra?.filialId == widget.filialId;
-      }).toList();
-    }
+      final hojeStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      var chamadosHoje = chamadoProvider.chamados.where((c) =>
+      DateFormat('yyyy-MM-dd').format(c.dataAgendada) == hojeStr).toList();
 
-    // Carrega apenas uma vez por obra
-    final Set<String> obrasProcessadas = {};
-    for (var chamado in chamadosHoje) {
-      if (chamado.obraId.isNotEmpty && !obrasProcessadas.contains(chamado.obraId)) {
-        obrasProcessadas.add(chamado.obraId);
-        await servicoProvider.carregarServicosDaObra(chamado.obraId, null);
+      if (widget.filialId != null) {
+        chamadosHoje = chamadosHoje.where((c) {
+          final obra = obraProvider.obras.firstWhereOrNull((o) => o.id == c.obraId);
+          return obra?.filialId == widget.filialId;
+        }).toList();
       }
+
+      final Set<String> obrasIds = chamadosHoje.map((c) => c.obraId)
+          .where((id) => id.isNotEmpty)
+          .toSet();
+
+      for (var obraId in obrasIds) {
+        await servicoProvider.carregarServicosDaObra(obraId, null);
+      }
+    } catch (e) {
+      debugPrint("❌ Erro ao carregar dados de hoje: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _atualizarManual() async {
+    await _loadTodayData();
+    widget.onRefresh();
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) {   // ← Corrigido aqui
     final chamadoProvider = context.watch<ChamadoProvider>();
     final servicoProvider = context.watch<ServicoProvider>();
     final obraProvider = context.watch<ObraProvider>();
 
-    // Recalcula chamados (reage ao realtime)
+    final hojeStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
     var chamadosHoje = chamadoProvider.chamados.where((c) =>
-    DateFormat('yyyy-MM-dd').format(c.dataAgendada) ==
-        DateFormat('yyyy-MM-dd').format(DateTime.now())).toList();
+    DateFormat('yyyy-MM-dd').format(c.dataAgendada) == hojeStr).toList();
 
     if (widget.filialId != null) {
       chamadosHoje = chamadosHoje.where((c) {
@@ -81,122 +100,112 @@ class _TodayTabState extends State<TodayTab> {
       }).toList();
     }
 
-    // ==================== CONTAGEM REAL POR CHAMADO ====================
-    int totalConcluido = 0;
-    int totalPendente = 0;
-    int totalNaoIniciado = 0;
+    int totalConcluido = 0, totalPendente = 0, totalNaoIniciado = 0;
 
     for (var chamado in chamadosHoje) {
       final servicosDaObra = servicoProvider.getServicosDaObra(chamado.obraId);
-
       final servicosDoChamado = servicosDaObra.where((s) {
         final servicoId = s['servico_id']?.toString() ?? '';
         return chamado.servicosIds.contains(servicoId);
       }).toList();
 
       for (var s in servicosDoChamado) {
-        final status = (s['status'] ?? 'nao_iniciado').toString().toLowerCase().trim();
-
-        if (status == 'concluido' || status == 'concluído') {
-          totalConcluido++;
-        } else if (status.contains('pendente')) {
-          totalPendente++;
-        } else {
-          totalNaoIniciado++;
-        }
+        final statusRaw = (s['status'] ?? 'nao_iniciado').toString().toLowerCase().trim();
+        if (statusRaw.contains('conclu')) totalConcluido++;
+        else if (statusRaw.contains('pendente')) totalPendente++;
+        else totalNaoIniciado++;
       }
     }
 
-    if (chamadosHoje.isEmpty) {
-      return const Center(child: Text("Nenhum chamado para hoje"));
-    }
-
-    return Column(
-      children: [
-        // Contadores
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-          color: Colors.grey[100],
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return RefreshIndicator(
+      onRefresh: _atualizarManual,
+      child: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _buildCounterCard(Icons.today, "Chamados de Hoje", chamadosHoje.length, Colors.blue),
-              _buildCounterCard(Icons.check_circle, "Concluídos", totalConcluido, Colors.green),
-              _buildCounterCard(Icons.access_time, "Pendentes", totalPendente, Colors.orange),
-              _buildCounterCard(Icons.hourglass_empty, "Não Iniciados", totalNaoIniciado, Colors.blueGrey),
+              const Text(
+                "Chamados de Hoje",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 16),
+              Row(
+                children: [
+                  _buildMiniCounter("Total", chamadosHoje.length, Colors.blue),
+                  const SizedBox(width: 6),
+                  _buildMiniCounter("Concluídos", totalConcluido, Colors.green),
+                  const SizedBox(width: 6),
+                  _buildMiniCounter("Pendentes", totalPendente, Colors.orange),
+                  const SizedBox(width: 6),
+                  _buildMiniCounter("Não Iniciados", totalNaoIniciado, Colors.blueGrey),
+                ],
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: _atualizarManual,
+                icon: const Icon(Icons.refresh, size: 26),
+                tooltip: "Atualizar",
+              ),
             ],
           ),
-        ),
 
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: chamadosHoje.length,
-            itemBuilder: (context, index) {
-              return ChamadoCard(
-                chamado: chamadosHoje[index],
-                onRefresh: widget.onRefresh,
-                onDelete: () async {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text("Excluir chamado?"),
-                      content: const Text("Esta ação não pode ser desfeita."),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text("Excluir", style: TextStyle(color: Colors.red)),
-                        ),
-                      ],
-                    ),
-                  );
+          const SizedBox(height: 16),
 
-                  if (confirm == true) {
-                    await context.read<ChamadoProvider>().excluirChamado(chamadosHoje[index].id);
-                    widget.onRefresh();
-                  }
-                },
+          if (chamadosHoje.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 60),
+                child: Text(
+                  "Nenhum chamado agendado para hoje",
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+              ),
+            )
+          else
+            ...chamadosHoje.map((chamado) {
+              final obra = obraProvider.obras.firstWhereOrNull((o) => o.id == chamado.obraId);
+              return InkWell(
+                onTap: () => showDialog(
+                  context: context,
+                  builder: (_) => ServicoPopup(chamado: chamado, obra: obra),
+                ),
+                borderRadius: BorderRadius.circular(12),
+                child: ChamadoCard(
+                  chamado: chamado,
+                  onRefresh: widget.onRefresh,
+                ),
               );
-            },
-          ),
-        ),
-      ],
+            }),
+        ],
+      ),
     );
   }
 
-  Widget _buildCounterCard(IconData icon, String label, int count, Color color) {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Container(
-        width: 230,
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: color, size: 28),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    label,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              count.toString(),
-              style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: color),
-            ),
-          ],
-        ),
+  Widget _buildMiniCounter(String label, int count, Color color) {
+    return Container(
+      width: 180,
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            count.toString(),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color),
+          ),
+        ],
       ),
     );
   }

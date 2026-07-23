@@ -1,6 +1,7 @@
 // lib/features/chamado/screens/admin/widgets/chamado_card.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:satiro_one/features/chamado/screens/admin/widgets/servico_popup.dart';
 
 import '../../../../obra/providers/obra_provider.dart';
 import '../../../../servicos/screens/obra_servico_form_screen.dart';
@@ -180,89 +181,14 @@ class ChamadoCard extends StatelessWidget {
   }
 
   void _mostrarServicos(BuildContext context) async {
-    final servicoProvider = context.read<ServicoProvider>();
-
-    if (chamado.obraId.isNotEmpty) {
-      await servicoProvider.carregarServicosDaObra(chamado.obraId, null);
-    }
-
-    final servicosObra = servicoProvider.getServicosDaObra(chamado.obraId);
-    final servicosGlobais = servicoProvider.servicos;
-
-    // Use o mesmo cálculo que já existe no build
     final obraProvider = context.read<ObraProvider>();
     final obra = obraProvider.obras.firstWhereOrNull((o) => o.id == chamado.obraId);
-    final obraNomeParaPopup = obra?.nome ?? chamado.obraNome ?? 'Obra';
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Serviços - $obraNomeParaPopup"),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 480,
-          child: chamado.servicosIds.isEmpty
-              ? const Center(child: Text("Nenhum serviço vinculado"))
-              : ListView.builder(
-            shrinkWrap: true,
-            itemCount: chamado.servicosIds.length,
-            itemBuilder: (context, index) {
-              final servicoId = chamado.servicosIds[index];
-
-              final item = servicosObra.firstWhereOrNull(
-                    (s) => (s['servico_id']?.toString() ?? '') == servicoId.toString(),
-              );
-
-              final servicoGlobal = servicosGlobais.firstWhereOrNull((s) => s.id == servicoId);
-
-              final nome = item?['servico']?['nome'] ??
-                  servicoGlobal?.nome ??
-                  'Serviço desconhecido';
-
-              final observacoes = (item?['observacoes'] ?? item?['observacao'] ?? '')
-                  .toString()
-                  .trim();
-
-              final statusRaw = (item?['status'] ?? 'nao_iniciado').toString().toLowerCase();
-
-              String statusText = 'Não Iniciado';
-              Color statusColor = Colors.blueGrey;
-              IconData statusIcon = Icons.access_time;
-
-              if (statusRaw == 'concluido' || statusRaw == 'concluído') {
-                statusText = 'Concluído';
-                statusColor = Colors.green;
-                statusIcon = Icons.check_circle;
-              } else if (statusRaw.contains('pendente')) {
-                statusText = 'Pendente';
-                statusColor = Colors.orange;
-                statusIcon = Icons.warning_amber;
-              }
-
-              return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: Icon(statusIcon, color: statusColor, size: 28),
-                  title: Text(nome, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text(
-                    observacoes.isNotEmpty ? observacoes : 'Sem observações',
-                    style: const TextStyle(fontSize: 13, color: Colors.grey),
-                  ),
-                  trailing: Text(
-                    statusText,
-                    style: TextStyle(color: statusColor, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Fechar"),
-          ),
-        ],
+      builder: (context) => ServicoPopup(
+        chamado: chamado,
+        obra: obra,
       ),
     );
   }
