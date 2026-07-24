@@ -17,6 +17,9 @@ import '../obra/screens/tecnico_home_screen.dart';
 // Telas de chamados
 import '../chamado/screens/admin/chamado_list_admin_screen.dart';
 
+// Nova tela de Controle de Materiais
+import '../material/screens/controle_materiais_screen.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -30,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this); // ← agora 7 abas
   }
 
   @override
@@ -49,13 +52,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       return const TecnicoHomeScreen();
     }
 
-    // Admin / Gerente / RH → menu completo
+    // TODO: Futuro - se for role "vendas", redirecionar para tela exclusiva de vendas
+    // if (employee?.isVendas == true) {
+    //   return const VendasHomeScreen();
+    // }
+
     final userName = employee?.name?.split(' ').first ?? 'Usuário';
 
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 62,
-        title: const Text("Satiro One", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        title: const Text(
+          "Satiro One",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.teal[900],
         foregroundColor: Colors.white,
         bottom: PreferredSize(
@@ -66,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             unselectedLabelColor: Colors.white70,
             indicatorColor: Colors.orange[400],
             indicatorWeight: 3,
+            isScrollable: true, // ← importante com 7 abas
             labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             unselectedLabelStyle: const TextStyle(fontSize: 13),
             tabs: const [
@@ -74,6 +85,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               Tab(icon: Icon(Icons.people, size: 18), text: "Clientes"),
               Tab(icon: Icon(Icons.group, size: 18), text: "Equipe"),
               Tab(icon: Icon(Icons.assignment, size: 18), text: "Chamados"),
+              Tab(icon: Icon(Icons.inventory_2, size: 18), text: "Compras"), // ← NOVA
               Tab(icon: Icon(Icons.settings, size: 18), text: "Config."),
             ],
           ),
@@ -102,7 +114,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   title: const Text('Sair?'),
                   content: const Text('Deseja realmente sair?'),
                   actions: [
-                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancelar'),
+                    ),
                     TextButton(
                       onPressed: () => Navigator.pop(context, true),
                       child: const Text('Sair', style: TextStyle(color: Colors.red)),
@@ -127,6 +142,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ClientesListScreen(),
           EmployeeListScreen(),
           ChamadoListAdminScreen(),
+          ControleMateriaisScreen(), // ← NOVA ABA
           ConfiguracoesScreen(),
         ],
       ),

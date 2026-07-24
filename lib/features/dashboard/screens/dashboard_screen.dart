@@ -1,13 +1,10 @@
 // lib/features/dashboard/screens/dashboard_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../obra/providers/obra_provider.dart';
 import '../../obra/screens/obra_list_screen.dart';
 import '../../obra/models/obra.dart';
-import '../../../widgets/safe_bar_chart.dart'; // ← Importe o widget que criamos
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -17,32 +14,16 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  List<Map<String, dynamic>> _todasFases = [];
   String? _selectedFilialId;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ObraProvider>().loadObras();
-      _carregarTodasFases();
+      if (mounted) {
+        context.read<ObraProvider>().loadObras();
+      }
     });
-  }
-
-  Future<void> _carregarTodasFases() async {
-    try {
-      final res = await Supabase.instance.client
-          .from('fase')
-          .select('nome, ordem')
-          .eq('ativo', true)
-          .order('ordem', ascending: true);
-
-      setState(() {
-        _todasFases = List.from(res);
-      });
-    } catch (e) {
-      debugPrint("Erro ao carregar fases: $e");
-    }
   }
 
   @override
@@ -64,12 +45,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return dias >= 0 && dias <= 15;
     }).length;
 
-    final Map<String, int> obrasPorFase = {};
-    for (var obra in filteredObras) {
-      final fase = obra.faseAtualNome ?? 'Sem Fase';
-      obrasPorFase[fase] = (obrasPorFase[fase] ?? 0) + 1;
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: const Text("Dashboard"),
@@ -80,19 +55,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
             padding: const EdgeInsets.only(right: 16),
             child: DropdownButton<String?>(
               value: _selectedFilialId,
-              hint: const Text("Todas as Filiais", style: TextStyle(color: Colors.white)),
+              hint: const Text(
+                "Todas as Filiais",
+                style: TextStyle(color: Colors.white),
+              ),
               icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
               dropdownColor: Colors.teal[800],
               style: const TextStyle(color: Colors.white),
-              underline: Container(),
+              underline: const SizedBox(),
               items: [
-                const DropdownMenuItem(value: null, child: Text("Todas as Filiais")),
-                ...provider.filiaisUnicas.map((f) => DropdownMenuItem(
-                  value: f['id'],
-                  child: Text(f['nome'] ?? ''),
-                )),
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text("Todas as Filiais"),
+                ),
+                // Só adiciona itens que tenham id válido
+                ...provider.filiaisUnicas
+                    .where((f) => f['id'] != null && f['id'].toString().isNotEmpty)
+                    .map((f) {
+                  final id = f['id'].toString();
+                  final nome = f['nome']?.toString() ?? 'Sem nome';
+                  return DropdownMenuItem<String?>(
+                    value: id,
+                    child: Text(nome),
+                  );
+                }),
               ],
-              onChanged: (value) => setState(() => _selectedFilialId = value),
+              onChanged: (value) {
+                if (mounted) {
+                  setState(() => _selectedFilialId = value);
+                }
+              },
             ),
           ),
         ],
@@ -102,44 +94,93 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Visão Geral das Obras", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            const Text(
+              "Visão Geral das Obras",
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 4),
-            Text("Atualizado agora • ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}"),
+            Text(
+              "Atualizado agora • ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}",
+              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+            ),
             const SizedBox(height: 24),
 
+            // ===================== CARDS DE RESUMO =====================
             SizedBox(
               height: 130,
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: [
-                  _buildCompactCard("Total", totalObras.toString(), Icons.home_work, Colors.teal, () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ObraListScreen()));
-                  }),
+                  _buildCompactCard(
+                    "Total",
+                    totalObras.toString(),
+                    Icons.home_work,
+                    Colors.teal,
+                        () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ObraListScreen()),
+                      );
+                    },
+                  ),
                   const SizedBox(width: 12),
-                  _buildCompactCard("Andamento", emAndamento.toString(), Icons.play_circle_outline, Colors.blue, () {}),
+                  _buildCompactCard(
+                    "Andamento",
+                    emAndamento.toString(),
+                    Icons.play_circle_outline,
+                    Colors.blue,
+                        () {},
+                  ),
                   const SizedBox(width: 12),
-                  _buildCompactCard("Concluídas", concluidas.toString(), Icons.check_circle_outline, Colors.green, () {}),
+                  _buildCompactCard(
+                    "Concluídas",
+                    concluidas.toString(),
+                    Icons.check_circle_outline,
+                    Colors.green,
+                        () {},
+                  ),
                   const SizedBox(width: 12),
-                  _buildCompactCard("Atrasadas", atrasadas.toString(), Icons.warning_amber, Colors.red, () {},
-                      obras: filteredObras.where((o) => o.statusCronograma.contains("Atrasado")).toList(), provider: provider),
+                  _buildCompactCard(
+                    "Atrasadas",
+                    atrasadas.toString(),
+                    Icons.warning_amber,
+                    Colors.red,
+                        () {},
+                    obras: filteredObras
+                        .where((o) => o.statusCronograma.contains("Atrasado"))
+                        .toList(),
+                    provider: provider,
+                  ),
                   const SizedBox(width: 12),
-                  _buildCompactCard("Próximas a Vencer", proximasVencer.toString(), Icons.timer, Colors.orange, () {},
-                      obras: filteredObras.where((o) {
-                        if (o.dataFimPrevistaFase == null) return false;
-                        final dias = o.dataFimPrevistaFase!.difference(DateTime.now()).inDays;
-                        return dias >= 0 && dias <= 15;
-                      }).toList(), provider: provider),
+                  _buildCompactCard(
+                    "Próximas a Vencer",
+                    proximasVencer.toString(),
+                    Icons.timer,
+                    Colors.orange,
+                        () {},
+                    obras: filteredObras.where((o) {
+                      if (o.dataFimPrevistaFase == null) return false;
+                      final dias = o.dataFimPrevistaFase!.difference(DateTime.now()).inDays;
+                      return dias >= 0 && dias <= 15;
+                    }).toList(),
+                    provider: provider,
+                  ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 32),
+            const SizedBox(height: 40),
 
-            const Text("Obras por Fase", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            SizedBox(
-              height: 480,
-              child: _buildBarChart(obrasPorFase),
+            // Espaço reservado para futuros indicadores importantes
+            // (ex: materiais pendentes, chamados abertos, faturamento, etc.)
+            Center(
+              child: Text(
+                "Em breve: indicadores de andamento real das obras",
+                style: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 14,
+                ),
+              ),
             ),
           ],
         ),
@@ -163,12 +204,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ? TextSpan(text: title)
             : TextSpan(
           children: [
-            TextSpan(text: "$title:\n", style: const TextStyle(fontWeight: FontWeight.bold)),
+            TextSpan(
+              text: "$title:\n",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             ...obras.take(8).map((obra) => TextSpan(
-              text: "• ${obra.nome} - ${provider?.getClienteNome(obra.clienteId) ?? 'Sem cliente'}\n",
+              text:
+              "• ${obra.nome} - ${provider?.getClienteNome(obra.clienteId) ?? 'Sem cliente'}\n",
               style: const TextStyle(fontSize: 13),
             )),
-            if (obras.length > 8) TextSpan(text: "... e mais ${obras.length - 8}"),
+            if (obras.length > 8)
+              TextSpan(text: "... e mais ${obras.length - 8}"),
           ],
         ),
         preferBelow: false,
@@ -178,7 +224,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 4))],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.15),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Row(
             children: [
@@ -189,120 +241,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(value, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-                    Text(title, style: TextStyle(fontSize: 14, color: Colors.grey[700])),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      title,
+                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildBarChart(Map<String, int> obrasPorFase) {
-    final List<BarChartGroupData> barGroups = [];
-    final List<Color> colors = [
-      Colors.teal[700]!, Colors.blue[700]!, Colors.green[700]!,
-      Colors.orange[700]!, Colors.purple[700]!, Colors.indigo[700]!,
-      Colors.pink[700]!, Colors.cyan[700]!
-    ];
-
-    for (int i = 0; i < _todasFases.length; i++) {
-      final faseNome = _todasFases[i]['nome'] as String;
-      final count = obrasPorFase[faseNome] ?? 0;
-      final color = colors[i % colors.length];
-
-      barGroups.add(
-        BarChartGroupData(
-          x: i,
-          barRods: [
-            BarChartRodData(
-              toY: count.toDouble(),
-              color: color,
-              width: 32,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return SafeBarChart(
-      barGroups: barGroups,
-      dataBuilder: (groups) => BarChartData(
-        alignment: BarChartAlignment.spaceAround,
-        maxY: groups.isEmpty ? 10 : groups.map((g) => g.barRods.first.toY).reduce((a, b) => a > b ? a : b) * 1.3,
-        barTouchData: BarTouchData(
-          enabled: true,
-          touchTooltipData: BarTouchTooltipData(
-            tooltipPadding: const EdgeInsets.all(8),
-            getTooltipItem: (group, groupIndex, rod, rodIndex) {
-              final fase = _todasFases[group.x]['nome'] as String;
-              return BarTooltipItem(
-                '$fase\n',
-                const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12),
-                children: [
-                  TextSpan(
-                    text: rod.toY.toInt().toString(),
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-        titlesData: FlTitlesData(
-          show: true,
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              getTitlesWidget: (value, meta) {
-                if (value.toInt() >= 0 && value.toInt() < _todasFases.length) {
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: RotatedBox(
-                      quarterTurns: -1,
-                      child: Text(
-                        _todasFases[value.toInt()]['nome'] as String,
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  );
-                }
-                return const SizedBox();
-              },
-              reservedSize: 140,
-            ),
-          ),
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 40,
-              interval: 1,
-              getTitlesWidget: (value, meta) => Text(
-                value.toInt().toString(),
-                style: const TextStyle(fontSize: 11),
-              ),
-            ),
-          ),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
-        gridData: FlGridData(
-          show: true,
-          drawHorizontalLine: true,
-          drawVerticalLine: true,
-          horizontalInterval: 1,
-          verticalInterval: 0.1,
-          getDrawingHorizontalLine: (value) => const FlLine(color: Color(0xFFE0E0E0), strokeWidth: 2),
-          getDrawingVerticalLine: (value) => const FlLine(color: Color(0xFFE0E0E0), strokeWidth: 2),
-        ),
-        borderData: FlBorderData(show: false),
-        barGroups: groups,
-        groupsSpace: 1,
       ),
     );
   }

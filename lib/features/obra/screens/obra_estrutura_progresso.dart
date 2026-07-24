@@ -12,12 +12,12 @@ class ObraEstruturaProgresso extends StatefulWidget {
   State<ObraEstruturaProgresso> createState() => _ObraEstruturaProgressoState();
 }
 
-class _ObraEstruturaProgressoState extends State<ObraEstruturaProgresso> with SingleTickerProviderStateMixin {
+class _ObraEstruturaProgressoState extends State<ObraEstruturaProgresso>
+    with SingleTickerProviderStateMixin {
   List<Map<String, dynamic>> fases = [];
   List<Map<String, dynamic>> ambientesDaObra = [];
   bool isLoading = true;
   TabController? _tabController;
-
   int faseAtualIndex = 0;
 
   @override
@@ -46,11 +46,18 @@ class _ObraEstruturaProgressoState extends State<ObraEstruturaProgresso> with Si
           .from('obra_ambiente')
           .select('*, obra_servico(*, servico(*), grupo:servico_grupo(*))')
           .eq('obra_id', widget.obra.id)
-          .order('nome');
+          .order('ordem');
 
       ambientesDaObra = List.from(resAmbientes);
 
-      faseAtualIndex = fases.indexWhere((f) => (f['status'] ?? '') != 'concluido');
+      // Tenta achar a fase ativa da obra
+      final faseAtualId = widget.obra.faseAtualId;
+      faseAtualIndex = fases.indexWhere((f) => f['fase_id'] == faseAtualId);
+
+      if (faseAtualIndex == -1) {
+        // Fallback: primeira não concluída
+        faseAtualIndex = fases.indexWhere((f) => (f['status'] ?? '') != 'concluido');
+      }
       if (faseAtualIndex == -1 || faseAtualIndex >= fases.length) {
         faseAtualIndex = fases.isNotEmpty ? fases.length - 1 : 0;
       }
@@ -91,41 +98,76 @@ class _ObraEstruturaProgressoState extends State<ObraEstruturaProgresso> with Si
 
     return Column(
       children: [
+        // ===================== TABS DE FASES =====================
         Container(
-          color: Colors.teal[50],
+          color: Colors.grey.shade50,
           child: TabBar(
             controller: _tabController,
             isScrollable: true,
-            labelColor: Colors.teal[900],
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: Colors.teal,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.grey.shade700,
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicator: BoxDecoration(
+              color: Colors.blue.shade100,           // ← azul clarinho para a aba selecionada
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.shade300),
+            ),
+            labelPadding: const EdgeInsets.symmetric(horizontal: 4),
             tabs: fases.asMap().entries.map((entry) {
               final index = entry.key;
               final faseData = entry.value;
               final fase = faseData['fase'] ?? {};
               final nome = fase['nome']?.toString() ?? 'Fase ${index + 1}';
+              final isCurrent = index == faseAtualIndex; // fase ativa da obra
 
               final servicos = _getServicosDaFase(faseData['fase_id'] as String?);
               final total = servicos.length;
-              final concluidos = servicos.where((s) => (s['status'] ?? '') == 'concluido').length;
-              final isCurrent = index == faseAtualIndex;
+              final concluidos =
+                  servicos.where((s) => (s['status'] ?? '') == 'concluido').length;
 
               return Tab(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(nome, style: TextStyle(fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal)),
-                    Text(
-                      "$concluidos/$total",
-                      style: TextStyle(fontSize: 11, color: isCurrent ? Colors.teal : Colors.grey),
-                    ),
-                  ],
+                height: 54,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    // Só a fase atual da obra fica verde forte
+                    color: isCurrent ? Colors.teal.shade400 : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                    border: isCurrent
+                        ? null
+                        : Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        nome,
+                        style: TextStyle(
+                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                          fontSize: 13,
+                          color: isCurrent ? Colors.white : Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "$concluidos/$total",
+                        style: TextStyle(
+                          fontSize: 11,
+                          // Contador mais brilhante na fase atual
+                          color: isCurrent ? Colors.white : Colors.grey.shade600,
+                          fontWeight: isCurrent ? FontWeight.w700 : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             }).toList(),
           ),
         ),
 
+        // ===================== CONTEÚDO =====================
         Expanded(
           child: TabBarView(
             controller: _tabController,
@@ -134,7 +176,8 @@ class _ObraEstruturaProgressoState extends State<ObraEstruturaProgresso> with Si
               return _AmbienteGridView(
                 ambientes: ambientesDaObra,
                 servicosDaFase: servicos,
-                onGrupoTap: (grupoNome, servicosGrupo) => _showGrupoPopup(context, grupoNome, servicosGrupo),
+                onGrupoTap: (grupoNome, servicosGrupo) =>
+                    _showGrupoPopup(context, grupoNome, servicosGrupo),
               );
             }).toList(),
           ),
@@ -159,7 +202,7 @@ class _ObraEstruturaProgressoState extends State<ObraEstruturaProgresso> with Si
       builder: (context) => AlertDialog(
         title: Text("Grupo: $grupoNome"),
         content: SizedBox(
-          width: 680,           // ← Largura que você gostou
+          width: 680,
           height: 520,
           child: ListView.builder(
             itemCount: servicos.length,
@@ -175,7 +218,7 @@ class _ObraEstruturaProgressoState extends State<ObraEstruturaProgresso> with Si
               final isEven = index % 2 == 0;
 
               return Container(
-                color: isEven ? Colors.grey[50] : Colors.white, // ← Linhas alternadas
+                color: isEven ? Colors.grey[50] : Colors.white,
                 child: ListTile(
                   leading: const Icon(Icons.build_circle, color: Colors.teal),
                   title: Text(titulo),
@@ -189,13 +232,17 @@ class _ObraEstruturaProgressoState extends State<ObraEstruturaProgresso> with Si
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Fechar")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Fechar"),
+          ),
         ],
       ),
     );
   }
 }
 
+// ===================== GRID DE AMBIENTES (CARDS MENORES) =====================
 class _AmbienteGridView extends StatelessWidget {
   final List<Map<String, dynamic>> ambientes;
   final List<dynamic> servicosDaFase;
@@ -212,8 +259,8 @@ class _AmbienteGridView extends StatelessWidget {
     return GridView.builder(
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 5,
-        childAspectRatio: 0.85,
+        crossAxisCount: 7, // ← mais cards por linha
+        childAspectRatio: 1.0, // ← cards mais baixos/compactos
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
       ),
@@ -224,43 +271,59 @@ class _AmbienteGridView extends StatelessWidget {
             .where((s) => servicosDaFase.any((sf) => sf['id'] == s['id']))
             .toList();
 
-        final concluidos = servicos.where((s) => (s['status'] ?? '') == 'concluido').length;
+        final concluidos =
+            servicos.where((s) => (s['status'] ?? '') == 'concluido').length;
+        final total = servicos.length;
+        final progresso = total == 0 ? 0.0 : concluidos / total;
 
         return Card(
-          elevation: 3,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           child: Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Nome do ambiente
                 Row(
                   children: [
-                    const Icon(Icons.room, color: Colors.purple, size: 22),
-                    const SizedBox(width: 6),
+                    const Icon(Icons.room, color: Colors.purple, size: 18),
+                    const SizedBox(width: 5),
                     Expanded(
                       child: Text(
                         amb['nome'] ?? 'Ambiente',
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                        maxLines: 2,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13.5,
+                        ),
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
+
+                // Progresso
                 Text(
-                  "$concluidos / ${servicos.length}",
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  "$concluidos / $total",
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 LinearProgressIndicator(
-                  value: servicos.isEmpty ? 0 : concluidos / servicos.length,
-                  minHeight: 6,
+                  value: progresso,
+                  minHeight: 5,
                   backgroundColor: Colors.grey[300],
-                  valueColor: const AlwaysStoppedAnimation(Colors.teal),
+                  valueColor: AlwaysStoppedAnimation(
+                    progresso == 1.0 ? Colors.green : Colors.teal,
+                  ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
+
+                // Grupos compactos
                 Expanded(
                   child: _buildGruposCompactos(context, servicos),
                 ),
@@ -273,7 +336,11 @@ class _AmbienteGridView extends StatelessWidget {
   }
 
   Widget _buildGruposCompactos(BuildContext context, List<dynamic> servicos) {
-    if (servicos.isEmpty) return const Center(child: Text("—", style: TextStyle(color: Colors.grey)));
+    if (servicos.isEmpty) {
+      return const Center(
+        child: Text("—", style: TextStyle(color: Colors.grey, fontSize: 16)),
+      );
+    }
 
     final Map<String, List<dynamic>> porGrupo = {};
     for (var s in servicos) {
@@ -281,29 +348,34 @@ class _AmbienteGridView extends StatelessWidget {
       porGrupo.putIfAbsent(grupoNome, () => []).add(s);
     }
 
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
-      children: porGrupo.entries.map((entry) {
-        final grupoNome = entry.key;
-        final servs = entry.value;
-        final concluidos = servs.where((s) => (s['status'] ?? '') == 'concluido').length;
+    return SingleChildScrollView(
+      child: Wrap(
+        spacing: 5,
+        runSpacing: 5,
+        children: porGrupo.entries.map((entry) {
+          final grupoNome = entry.key;
+          final servs = entry.value;
+          final concluidos =
+              servs.where((s) => (s['status'] ?? '') == 'concluido').length;
 
-        return InkWell(
-          onTap: () => onGrupoTap(grupoNome, servs),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(8),
+          return InkWell(
+            onTap: () => onGrupoTap(grupoNome, servs),
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Text(
+                "$grupoNome ($concluidos/${servs.length})",
+                style: const TextStyle(fontSize: 11),
+              ),
             ),
-            child: Text(
-              "$grupoNome ($concluidos/${servs.length})",
-              style: const TextStyle(fontSize: 11.5),
-            ),
-          ),
-        );
-      }).toList(),
+          );
+        }).toList(),
+      ),
     );
   }
 }

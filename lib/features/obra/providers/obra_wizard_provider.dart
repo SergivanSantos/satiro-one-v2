@@ -304,37 +304,149 @@ class ObraWizardProvider extends ChangeNotifier {
     if (pisos.isEmpty) return;
 
     try {
-      // Remove estrutura antiga
-      await Supabase.instance.client.from('pavimento').delete().eq('obra_id_original', obraId);
-      await Supabase.instance.client.from('obra_ambiente').delete().eq('obra_id', obraId);
+      final isEdicao = obraIdParaEditar != null;
 
-      for (int i = 0; i < pisos.length; i++) {
-        final pisoTemp = pisos[i];
+      if (!isEdicao) {
+        // ==================== CRIAÇÃO ====================
+        for (int i = 0; i < pisos.length; i++) {
+          final pisoTemp = pisos[i];
 
-        final pisoResponse = await Supabase.instance.client
-            .from('pavimento')
-            .insert({
-          'obra_id_original': obraId,
-          'nome': pisoTemp.nome,
-          'ordem': i + 1,
-          'ativo': true,
-        })
-            .select()
-            .single();
-
-        final String pisoId = pisoResponse['id'];
-
-        for (int j = 0; j < pisoTemp.ambientes.length; j++) {
-          await Supabase.instance.client.from('obra_ambiente').insert({
-            'obra_id': obraId,
-            'obra_piso_id': pisoId,
-            'nome': pisoTemp.ambientes[j],
-            'ordem': j + 1,
+          final pisoResponse = await Supabase.instance.client
+              .from('pavimento')
+              .insert({
+            'obra_id_original': obraId,
+            'nome': pisoTemp.nome,
+            'ordem': i + 1,
             'ativo': true,
-          });
+          })
+              .select()
+              .single();
+
+          final String pisoId = pisoResponse['id'];
+
+          for (int j = 0; j < pisoTemp.ambientes.length; j++) {
+            await Supabase.instance.client.from('obra_ambiente').insert({
+              'obra_id': obraId,
+              'obra_piso_id': pisoId,
+              'nome': pisoTemp.ambientes[j],
+              'ordem': j + 1,
+              'ativo': true,
+            });
+          }
+        }
+        debugPrint("✅ Estrutura criada (${pisos.length} pavimentos)");
+        return;
+      }
+
+      // ==================== EDIÇÃO (inteligente) ====================
+
+      // 1. Busca pavimentos atuais no banco
+      final pavimentosAtuais = await Supabase.instance.client
+          .from('pavimento')
+          .select('id, nome')
+          .eq('obra_id_original', obraId);
+
+      final Map<String, String> nomeParaIdAtual = {
+        for (var p in pavimentosAtuais) (p['nome'] as String): p['id'] as String
+      };
+
+      final Set<String> nomesQueDevemFicar = pisos.map((p) => p.nome).toSet();
+
+      // 2. Remove apenas os pavimentos que o usuário tirou
+      for (final entry in nomeParaIdAtual.entries) {
+        if (!nomesQueDevemFicar.contains(entry.key)) {
+          // Esse pavimento foi removido pelo usuário → exclui
+          await Supabase.instance.client
+              .from('obra_ambiente')
+              .delete()
+              .eq('obra_piso_id', entry.value);
+
+          await Supabase.instance.client
+              .from('pavimento')
+              .delete()
+              .eq('id', entry.value);
+
+          debugPrint("🗑️ Pavimento removido: ${entry.key}");
         }
       }
-      debugPrint("✅ Estrutura salva com sucesso! (${pisos.length} pavimentos)");
+
+      // 3. Atualiza ou cria os pavimentos que devem ficar
+      for (int i = 0; i < pisos.length; i++) {
+        final pisoTemp = pisos[i];
+        String pisoId;
+
+        if (nomeParaIdAtual.containsKey(pisoTemp.nome)) {
+          // Já existe → só atualiza a ordem
+          pisoId = nomeParaIdAtual[pisoTemp.nome]!;
+          await Supabase.instance.client
+              .from('pavimento')
+              .update({'ordem': i + 1})
+              .eq('id', pisoId);
+        } else {
+          // Novo pavimento
+          final response = await Supabase.instance.client
+              .from('pavimento')
+              .insert({
+            'obra_id_original': obraId,
+            'nome': pisoTemp.nome,
+            'ordem': i + 1,
+            'ativo': true,
+          })
+              .select()
+              .single();
+          pisoId = response['id'];
+          debugPrint("➕ Novo pavimento criado: ${pisoTemp.nome}");
+        }
+
+        // ===== Ambientes deste pavimento =====
+        // Busca ambientes atuais deste piso
+        final ambientesAtuais = await Supabase.instance.client
+            .from('obra_ambiente')
+            .select('id, nome')
+            .eq('obra_piso_id', pisoId);
+
+        final Map<String, String> ambienteNomeParaId = {
+          for (var a in ambientesAtuais) (a['nome'] as String): a['id'] as String
+        };
+
+        final Set<String> ambientesQueDevemFicar = pisoTemp.ambientes.toSet();
+
+        // Remove apenas os ambientes que foram desmarcados
+        for (final entry in ambienteNomeParaId.entries) {
+          if (!ambientesQueDevemFicar.contains(entry.key)) {
+            await Supabase.instance.client
+                .from('obra_ambiente')
+                .delete()
+                .eq('id', entry.value);
+            debugPrint("🗑️ Ambiente removido: ${entry.key}");
+          }
+        }
+
+        // Cria os ambientes novos
+        for (int j = 0; j < pisoTemp.ambientes.length; j++) {
+          final nomeAmbiente = pisoTemp.ambientes[j];
+
+          if (!ambienteNomeParaId.containsKey(nomeAmbiente)) {
+            // Ambiente novo
+            await Supabase.instance.client.from('obra_ambiente').insert({
+              'obra_id': obraId,
+              'obra_piso_id': pisoId,
+              'nome': nomeAmbiente,
+              'ordem': j + 1,
+              'ativo': true,
+            });
+            debugPrint("➕ Novo ambiente criado: $nomeAmbiente");
+          } else {
+            // Já existe → só atualiza a ordem
+            await Supabase.instance.client
+                .from('obra_ambiente')
+                .update({'ordem': j + 1})
+                .eq('id', ambienteNomeParaId[nomeAmbiente]!);
+          }
+        }
+      }
+
+      debugPrint("✅ Estrutura sincronizada com sucesso (modo edição)");
     } catch (e) {
       debugPrint("❌ Erro ao salvar estrutura: $e");
     }

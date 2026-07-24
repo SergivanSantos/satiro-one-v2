@@ -45,7 +45,14 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ObraProvider>();
-    final clienteNome = provider.getClienteNome(widget.obra.clienteId) ?? 'Cliente não informado';
+
+    // Pega a obra atualizada de forma segura
+    final obra = provider.obras.cast<Obra?>().firstWhere(
+          (o) => o?.id == widget.obra.id,
+      orElse: () => widget.obra,
+    )!;
+
+    final clienteNome = provider.getClienteNome(obra.clienteId) ?? 'Cliente não informado';
 
     return Scaffold(
       appBar: AppBar(
@@ -53,7 +60,7 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              widget.obra.nome,
+              obra.nome,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             Text(
@@ -68,7 +75,7 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
           IconButton(
             icon: const Icon(Icons.backup_outlined),
             tooltip: "Fazer Backup da Obra",
-            onPressed: () => _fazerBackup(context, widget.obra.id),
+            onPressed: () => _fazerBackup(context, obra.id),
           ),
           IconButton(
             icon: const Icon(Icons.history),
@@ -77,7 +84,7 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ObraBackupHistoryScreen(obra: widget.obra),
+                  builder: (_) => ObraBackupHistoryScreen(obra: obra),
                 ),
               );
             },
@@ -89,7 +96,7 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ObraWizardScreen(obraParaEditar: widget.obra),
+                  builder: (_) => ObraWizardScreen(obraParaEditar: obra),
                 ),
               );
             },
@@ -97,7 +104,7 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
           TextButton.icon(
             icon: const Icon(Icons.change_circle, color: Colors.white),
             label: const Text("Alterar Fase", style: TextStyle(color: Colors.white)),
-            onPressed: () => _alterarFaseObra(context),
+            onPressed: () => _alterarFaseObra(context, obra),
           ),
         ],
         bottom: TabBar(
@@ -120,16 +127,24 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildInformacoesTab(provider),
-          ObraFasesScreen(obra: widget.obra),
-          _buildEstruturaTab(),
-          ObraServicosScreen(obra: widget.obra),
+          _buildInformacoesTab(provider, obra),
+          ObraFasesScreen(obra: obra),
+          _buildEstruturaTab(obra),
+          ObraServicosScreen(obra: obra),
           ObraMateriaisScreen(
-            obraId: widget.obra.id,
-            obraNome: widget.obra.nome,
+            obraId: obra.id,
+            obraNome: obra.nome,
           ),
-          _buildOrdensServicoTab(),   // ← Nova aba customizada com botão
-          const Center(child: Text("Módulo de Gastos em desenvolvimento", style: TextStyle(fontSize: 18))),
+          OrdemServicoListScreen(
+            obraId: obra.id,
+            obraNome: obra.nome,
+          ),
+          const Center(
+            child: Text(
+              "Módulo de Gastos em desenvolvimento",
+              style: TextStyle(fontSize: 18),
+            ),
+          ),
         ],
       ),
     );
@@ -175,12 +190,12 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
     }
   }
 
-  Widget _buildInformacoesTab(ObraProvider provider) {
-    final responsavelNome = widget.obra.responsavelNome ?? 'Não informado';
-    final responsavelTelefone = widget.obra.responsavelContato ?? '';
+  Widget _buildInformacoesTab(ObraProvider provider, Obra obra) {
+    final responsavelNome = obra.responsavelNome ?? 'Não informado';
+    final responsavelTelefone = obra.responsavelContato ?? '';
 
-    final arquitetoNome = provider.getArquitetoNome(widget.obra.arquitetoId) ?? 'Não informado';
-    final construtoraNome = provider.getConstrutoraNome(widget.obra.construtoraId) ?? 'Não informado';
+    final arquitetoNome = provider.getArquitetoNome(obra.arquitetoId) ?? 'Não informado';
+    final construtoraNome = provider.getConstrutoraNome(obra.construtoraId) ?? 'Não informado';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -194,22 +209,21 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
               child: Column(
                 children: [
                   _infoRow(Icons.calendar_today, "Data de Início",
-                      widget.obra.dataInicio != null
-                          ? DateFormat('dd/MM/yyyy').format(widget.obra.dataInicio!)
+                      obra.dataInicio != null
+                          ? DateFormat('dd/MM/yyyy').format(obra.dataInicio!)
                           : 'Não informada'),
 
-                  _infoRow(Icons.flag, "Fase Atual", widget.obra.faseAtualDisplay),
+                  _infoRow(Icons.flag, "Fase Atual", obra.faseAtualDisplay),
 
-                  if (widget.obra.dataUltimaMudancaFase != null)
+                  if (obra.dataUltimaMudancaFase != null)
                     _infoRow(Icons.update, "Última Mudança",
-                        "${DateFormat("dd/MM/yyyy HH:mm").format(widget.obra.dataUltimaMudancaFase!)} "
-                            "por ${widget.obra.responsavelUltimaMudanca ?? '—'}"),
+                        "${DateFormat("dd/MM/yyyy HH:mm").format(obra.dataUltimaMudancaFase!)} "
+                            "por ${obra.responsavelUltimaMudanca ?? '—'}"),
 
-                  _infoRow(Icons.info_outline, "Status", widget.obra.status.toUpperCase()),
+                  _infoRow(Icons.info_outline, "Status", obra.status.toUpperCase()),
 
                   const Divider(height: 32),
 
-                  // === RESPONSÁVEL DA OBRA (COM BOTÃO DE EDITAR) ===
                   Row(
                     children: [
                       Expanded(
@@ -223,25 +237,23 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
                       IconButton(
                         icon: const Icon(Icons.edit, color: Colors.teal),
                         tooltip: "Editar Responsável",
-                        onPressed: () => _editarResponsavelObra(context),
+                        onPressed: () => _editarResponsavelObra(context, obra),
                       ),
                     ],
                   ),
 
-                  // Arquiteto
                   _infoRowWithContact(
                     Icons.architecture,
                     "Arquiteto",
                     arquitetoNome,
-                    provider.getArquitetoTelefone(widget.obra.arquitetoId),
+                    provider.getArquitetoTelefone(obra.arquitetoId),
                   ),
 
-                  // Construtora
                   _infoRowWithContact(
                     Icons.business,
                     "Construtora",
                     construtoraNome,
-                    provider.getConstrutoraTelefone(widget.obra.construtoraId),
+                    provider.getConstrutoraTelefone(obra.construtoraId),
                   ),
                 ],
               ),
@@ -309,10 +321,9 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
   }
 
   // ==================== ALTERAR FASE (COM ORDEM CORRETA) ====================
-  void _alterarFaseObra(BuildContext context) async {
+  void _alterarFaseObra(BuildContext context, Obra obra) async {
     final supabase = Supabase.instance.client;
 
-    // Carrega fases na ordem correta (ordem crescente)
     final fases = await supabase
         .from('fase')
         .select()
@@ -332,7 +343,7 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
             itemCount: fases.length,
             itemBuilder: (context, index) {
               final fase = fases[index];
-              final isCurrent = fase['id'].toString() == widget.obra.faseAtualId;
+              final isCurrent = fase['id'].toString() == obra.faseAtualId;
 
               return ListTile(
                 leading: isCurrent
@@ -353,7 +364,10 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
                             "Esta ação será registrada no histórico.",
                       ),
                       actions: [
-                        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text("Cancelar"),
+                        ),
                         TextButton(
                           onPressed: () => Navigator.pop(context, true),
                           child: const Text("Confirmar", style: TextStyle(color: Colors.orange)),
@@ -363,7 +377,7 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
                   );
 
                   if (confirm == true && mounted) {
-                    await _salvarMudancaFase(fase);
+                    await _salvarMudancaFase(fase, obra);
                   }
                 },
               );
@@ -375,9 +389,9 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
   }
 
 
-  Future<void> _editarResponsavelObra(BuildContext context) async {
-    final nomeController = TextEditingController(text: widget.obra.responsavelNome);
-    final contatoController = TextEditingController(text: widget.obra.responsavelContato);
+  Future<void> _editarResponsavelObra(BuildContext context, Obra obra) async {
+    final nomeController = TextEditingController(text: obra.responsavelNome);
+    final contatoController = TextEditingController(text: obra.responsavelContato);
 
     final result = await showDialog<Map<String, String>>(
       context: context,
@@ -418,13 +432,11 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
 
     if (result == null || !mounted) return;
 
-    final supabase = Supabase.instance.client;
-
     try {
-      await supabase.from('obra').update({
+      await Supabase.instance.client.from('obra').update({
         'responsavel_nome': result['nome'],
         'responsavel_contato': result['contato'],
-      }).eq('id', widget.obra.id);
+      }).eq('id', obra.id);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -434,7 +446,6 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
           ),
         );
 
-        // Recarrega os dados
         context.read<ObraProvider>().loadObras();
       }
     } catch (e) {
@@ -445,51 +456,35 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
       }
     }
   }
+  Future<void> _salvarMudancaFase(Map<String, dynamic> novaFase, Obra obra) async {
+    final provider = context.read<ObraProvider>();
 
-  Future<void> _salvarMudancaFase(Map<String, dynamic> novaFase) async {
-    final supabase = Supabase.instance.client;
-    final user = Supabase.instance.client.auth.currentUser;
+    final sucesso = await provider.alterarFaseAtual(
+      obraId: obra.id,
+      novaFaseId: novaFase['id'],
+      novaFaseNome: novaFase['nome'],
+      faseAnteriorId: obra.faseAtualId,
+      observacao: 'Mudança manual via detalhes da obra',
+    );
 
-    try {
-      await supabase.from('obra').update({
-        'fase_atual_id': novaFase['id'],
-        'fase_atual_nome': novaFase['nome'],
-        'data_ultima_mudanca_fase': DateTime.now().toIso8601String(),
-        'responsavel_ultima_mudanca': user?.email ?? 'Administrador',
-      }).eq('id', widget.obra.id);
-
-      await supabase.from('obra_fase_historico').insert({
-        'obra_id': widget.obra.id,
-        'fase_anterior_id': widget.obra.faseAtualId,
-        'fase_nova_id': novaFase['id'],
-        'responsavel_nome': user?.email ?? 'Administrador',
-        'observacao': 'Mudança manual via detalhes da obra',
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("✅ Fase alterada para ${novaFase['nome']} com sucesso!"),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        context.read<ObraProvider>().loadObras();
-      }
-    } catch (e) {
-      debugPrint("Erro ao alterar fase: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Erro ao alterar fase: $e"),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+    if (sucesso && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("✅ Fase alterada para ${novaFase['nome']} com sucesso!"),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Erro ao alterar a fase"),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
-  Widget _buildEstruturaTab() {
+  Widget _buildEstruturaTab(Obra obra) {
     return DefaultTabController(
       length: 2,
       child: Column(
@@ -508,8 +503,8 @@ class _ObraDetailScreenState extends State<ObraDetailScreen> with SingleTickerPr
           Expanded(
             child: TabBarView(
               children: [
-                ObraEstruturaHierarquia(obra: widget.obra),
-                ObraEstruturaProgresso(obra: widget.obra),
+                ObraEstruturaHierarquia(obra: obra),
+                ObraEstruturaProgresso(obra: obra),
               ],
             ),
           ),

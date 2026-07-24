@@ -16,12 +16,18 @@ class ObraEstruturaHierarquia extends StatefulWidget {
 class _ObraEstruturaHierarquiaState extends State<ObraEstruturaHierarquia> {
   List<Map<String, dynamic>> pavimentos = [];
   bool isLoading = true;
-  bool _allExpanded = false; // Inicia recolhido
+  bool _allExpanded = false;
+
+  // Controla quais itens estão expandidos
+  final Set<String> _expandedPavimentos = {};
+  final Set<String> _expandedAmbientes = {};
 
   @override
   void initState() {
     super.initState();
-    _carregarHierarquia();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _carregarHierarquia();
+    });
   }
 
   Future<void> _carregarHierarquia() async {
@@ -32,12 +38,12 @@ class _ObraEstruturaHierarquiaState extends State<ObraEstruturaHierarquia> {
       final res = await Supabase.instance.client
           .from('obra_ambiente')
           .select('''
-            *,
-            pavimento:obra_piso_id (id, nome, ordem),
-            obra_servico(*, servico(*), grupo:servico_grupo(*))
-          ''')
+          *,
+          pavimento:obra_piso_id (id, nome, ordem),
+          obra_servico(*, servico(*), grupo:servico_grupo(*))
+        ''')
           .eq('obra_id', widget.obra.id)
-          .order('pavimento(ordem)');
+          .order('ordem', ascending: true); // ordena pelos ambientes
 
       final Map<String, Map<String, dynamic>> pavMap = {};
 
@@ -57,9 +63,18 @@ class _ObraEstruturaHierarquiaState extends State<ObraEstruturaHierarquia> {
         pavMap[pavId]!['ambientes'].add(amb as Map<String, dynamic>);
       }
 
-      // Ordena os pavimentos por ordem
+      // Ordena os pavimentos pela ordem correta
       pavimentos = pavMap.values.toList()
         ..sort((a, b) => (a['ordem'] as int).compareTo(b['ordem'] as int));
+
+      // Opcional: ordena também os ambientes dentro de cada pavimento
+      for (var p in pavimentos) {
+        (p['ambientes'] as List).sort((a, b) {
+          final ordemA = a['ordem'] as int? ?? 0;
+          final ordemB = b['ordem'] as int? ?? 0;
+          return ordemA.compareTo(ordemB);
+        });
+      }
 
       debugPrint("✅ Hierarquia carregada: ${pavimentos.length} pavimentos");
       for (var p in pavimentos) {
@@ -74,7 +89,20 @@ class _ObraEstruturaHierarquiaState extends State<ObraEstruturaHierarquia> {
   }
 
   void _toggleAllExpanded() {
-    setState(() => _allExpanded = !_allExpanded);
+    setState(() {
+      _allExpanded = !_allExpanded;
+      if (_allExpanded) {
+        for (var p in pavimentos) {
+          _expandedPavimentos.add(p['id']?.toString() ?? '');
+          for (var amb in (p['ambientes'] as List)) {
+            _expandedAmbientes.add(amb['id']?.toString() ?? '');
+          }
+        }
+      } else {
+        _expandedPavimentos.clear();
+        _expandedAmbientes.clear();
+      }
+    });
   }
 
   @override
@@ -96,7 +124,8 @@ class _ObraEstruturaHierarquiaState extends State<ObraEstruturaHierarquia> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text("Estrutura da Obra", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text("Estrutura da Obra",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 TextButton.icon(
                   onPressed: _toggleAllExpanded,
                   icon: Icon(_allExpanded ? Icons.unfold_less : Icons.unfold_more),
@@ -105,50 +134,75 @@ class _ObraEstruturaHierarquiaState extends State<ObraEstruturaHierarquia> {
               ],
             ),
           ),
-
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(12),
               itemCount: pavimentos.length,
               itemBuilder: (context, index) {
                 final piso = pavimentos[index];
+                final pavId = piso['id']?.toString() ?? 'pav_$index';
                 final ambientes = piso['ambientes'] as List<dynamic>? ?? [];
+                final isPavExpanded = _expandedPavimentos.contains(pavId);
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   elevation: 3,
                   child: ExpansionTile(
-                    initiallyExpanded: _allExpanded,
+                    key: ValueKey('pav_$pavId'),
+                    initiallyExpanded: isPavExpanded,
+                    onExpansionChanged: (expanded) {
+                      setState(() {
+                        if (expanded) {
+                          _expandedPavimentos.add(pavId);
+                        } else {
+                          _expandedPavimentos.remove(pavId);
+                        }
+                      });
+                    },
                     leading: const Icon(Icons.layers, color: Colors.teal),
                     title: Text(
                       piso['nome'] ?? 'Pavimento sem nome',
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-                    subtitle: Text("${ambientes.length} ambientes", style: const TextStyle(fontSize: 13)),
-                    children: [
-                      ...ambientes.map((amb) {
-                        final servicos = amb['obra_servico'] as List<dynamic>? ?? [];
+                    subtitle: Text("${ambientes.length} ambientes",
+                        style: const TextStyle(fontSize: 13)),
+                    children: ambientes.map((amb) {
+                      final ambId = amb['id']?.toString() ?? '';
+                      final servicos = amb['obra_servico'] as List<dynamic>? ?? [];
+                      final isAmbExpanded = _expandedAmbientes.contains(ambId);
 
-                        return ExpansionTile(
-                          initiallyExpanded: _allExpanded,
-                          leading: const Icon(Icons.room, color: Colors.purple, size: 24),
-                          title: Text(amb['nome'] ?? 'Ambiente', style: const TextStyle(fontWeight: FontWeight.w600)),
-                          subtitle: Text("${servicos.length} serviços", style: const TextStyle(fontSize: 13)),
-                          children: [
-                            if (servicos.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
-                                child: _buildServicosPorGrupo(servicos),
-                              )
-                            else
-                              const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Text("Nenhum serviço", style: TextStyle(color: Colors.grey)),
-                              ),
-                          ],
-                        );
-                      }).toList(),
-                    ],
+                      return ExpansionTile(
+                        key: ValueKey('amb_$ambId'),
+                        initiallyExpanded: isAmbExpanded,
+                        onExpansionChanged: (expanded) {
+                          setState(() {
+                            if (expanded) {
+                              _expandedAmbientes.add(ambId);
+                            } else {
+                              _expandedAmbientes.remove(ambId);
+                            }
+                          });
+                        },
+                        leading: const Icon(Icons.room, color: Colors.purple, size: 24),
+                        title: Text(amb['nome'] ?? 'Ambiente',
+                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text("${servicos.length} serviços",
+                            style: const TextStyle(fontSize: 13)),
+                        children: [
+                          if (servicos.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
+                              child: _buildServicosPorGrupo(servicos),
+                            )
+                          else
+                            const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: Text("Nenhum serviço",
+                                  style: TextStyle(color: Colors.grey)),
+                            ),
+                        ],
+                      );
+                    }).toList(),
                   ),
                 );
               },

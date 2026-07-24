@@ -183,4 +183,48 @@ class ObraProvider extends ChangeNotifier {
     return _construtoraTelefones[id] ?? 'Não informado';
   }
 
+  /// Altera a fase atual de uma obra e grava histórico
+  Future<bool> alterarFaseAtual({
+    required String obraId,
+    required String novaFaseId,
+    required String novaFaseNome,
+    String? faseAnteriorId,
+    String? responsavel,
+    String? observacao,
+  }) async {
+    try {
+      final userEmail = _supabase.auth.currentUser?.email ?? responsavel ?? 'Administrador';
+
+      // 1. Atualiza a obra
+      await _supabase.from('obra').update({
+        'fase_atual_id': novaFaseId,
+        'fase_atual_nome': novaFaseNome,
+        'data_ultima_mudanca_fase': DateTime.now().toIso8601String(),
+        'responsavel_ultima_mudanca': userEmail,
+      }).eq('id', obraId);
+
+      // 2. Grava histórico (se a tabela existir)
+      try {
+        await _supabase.from('obra_fase_historico').insert({
+          'obra_id': obraId,
+          'fase_anterior_id': faseAnteriorId,
+          'fase_nova_id': novaFaseId,
+          'responsavel_nome': userEmail,
+          'observacao': observacao ?? 'Mudança manual',
+        });
+      } catch (e) {
+        debugPrint("⚠️ Não foi possível gravar histórico de fase: $e");
+      }
+
+      // 3. Recarrega as obras
+      await loadObras();
+
+      debugPrint("✅ Fase da obra $obraId alterada para $novaFaseNome");
+      return true;
+    } catch (e) {
+      debugPrint("❌ Erro ao alterar fase da obra: $e");
+      return false;
+    }
+  }
+
 }

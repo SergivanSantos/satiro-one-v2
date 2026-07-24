@@ -2,13 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 
 import '../../material/models/marca.dart';
 import '../../material/models/modelo.dart';
 import '../../material/providers/material_provider.dart';
-import '../models/obra_material.dart';
+import '../../obra/models/obra_material.dart';
 
 class ObraMaterialFormScreen extends StatefulWidget {
   final String obraId;
@@ -21,13 +19,11 @@ class ObraMaterialFormScreen extends StatefulWidget {
 
 class _ObraMaterialFormScreenState extends State<ObraMaterialFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _quantidadeController = TextEditingController();
+  final _quantidadeController = TextEditingController(text: '1');
 
   String? _materialIdSelecionado;
-  String _status = 'a_comprar';
-  File? _fotoEntrega;
-
   bool _isLoading = true;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -45,111 +41,207 @@ class _ObraMaterialFormScreenState extends State<ObraMaterialFormScreen> {
     });
   }
 
-  Future<void> _tirarFoto() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.camera);
-
-    if (pickedFile != null && mounted) {
-      setState(() => _fotoEntrega = File(pickedFile.path));
-    }
+  @override
+  void dispose() {
+    _quantidadeController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final materialProvider = context.watch<MaterialProvider>();
 
-    if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
     return Scaffold(
-      appBar: AppBar(title: const Text("Adicionar Material na Obra")),
-      body: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+      appBar: AppBar(
+        title: const Text("Adicionar Material"),
+        centerTitle: true,
+        elevation: 0,
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
+        child: Form(
+          key: _formKey,
           child: Column(
             children: [
-              DropdownButtonFormField<String>(
-                value: _materialIdSelecionado,
-                decoration: const InputDecoration(labelText: "Material *"),
-                isExpanded: true,
-                items: materialProvider.materiais.map((m) {
-                  final marca = materialProvider.marcas.cast<Marca?>().firstWhere(
-                        (ma) => ma?.id == m.marcaId,
-                    orElse: () => null,
-                  );
-                  final modelo = materialProvider.modelos.cast<Modelo?>().firstWhere(
-                        (mo) => mo?.id == m.modeloId,
-                    orElse: () => null,
-                  );
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Título sutil
+                      Text(
+                        "Selecione o material que será utilizado nesta obra",
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
 
-                  final marcaNome = marca?.nome ?? 'Sem marca';
-                  final modeloNome = modelo?.nome ?? 'Sem modelo';
+                      // ===================== MATERIAL =====================
+                      DropdownButtonFormField<String>(
+                        value: _materialIdSelecionado,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: "Material *",
+                          prefixIcon: const Icon(Icons.inventory_2_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey[50],
+                        ),
+                        items: materialProvider.materiais.map((m) {
+                          final marca = materialProvider.marcas
+                              .cast<Marca?>()
+                              .firstWhere(
+                                (ma) => ma?.id == m.marcaId,
+                            orElse: () => null,
+                          );
+                          final modelo = materialProvider.modelos
+                              .cast<Modelo?>()
+                              .firstWhere(
+                                (mo) => mo?.id == m.modeloId,
+                            orElse: () => null,
+                          );
 
-                  final displayText = [
-                    if (m.codigo != null && m.codigo!.isNotEmpty) m.codigo!,
-                    m.nome,
-                    marcaNome,
-                    modeloNome,
-                  ].join(" - ");
+                          final partes = <String>[];
+                          if (m.codigo != null && m.codigo!.isNotEmpty) {
+                            partes.add(m.codigo!);
+                          }
+                          partes.add(m.nome);
+                          if (marca != null) partes.add(marca.nome);
+                          if (modelo != null) partes.add(modelo.nome);
 
-                  return DropdownMenuItem<String>(
-                    value: m.id,
-                    child: Text(
-                      displayText,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) => setState(() => _materialIdSelecionado = value),
-                validator: (value) => value == null ? "Selecione um material" : null,
-              ),
-              const SizedBox(height: 16),
+                          return DropdownMenuItem<String>(
+                            value: m.id,
+                            child: Text(
+                              partes.join(" • "),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              style: const TextStyle(fontSize: 15),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() => _materialIdSelecionado = value);
+                        },
+                        validator: (value) =>
+                        value == null ? "Selecione um material" : null,
+                      ),
+                      const SizedBox(height: 24),
 
-              TextFormField(
-                controller: _quantidadeController,
-                decoration: const InputDecoration(labelText: "Quantidade *"),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                validator: (value) => (value == null || double.tryParse(value) == null || double.parse(value) <= 0)
-                    ? "Quantidade inválida"
-                    : null,
-              ),
-              const SizedBox(height: 16),
+                      // ===================== QUANTIDADE =====================
+                      TextFormField(
+                        controller: _quantidadeController,
+                        decoration: InputDecoration(
+                          labelText: "Quantidade *",
+                          prefixIcon: const Icon(Icons.numbers),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey[50],
+                          suffixText: _materialIdSelecionado != null
+                              ? materialProvider.materiais
+                              .firstWhere((m) => m.id == _materialIdSelecionado)
+                              .unidade
+                              : null,
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return "Informe a quantidade";
+                          }
+                          final qtd = double.tryParse(value.replaceAll(',', '.'));
+                          if (qtd == null || qtd <= 0) {
+                            return "Quantidade inválida";
+                          }
+                          return null;
+                        },
+                      ),
 
-              DropdownButtonFormField<String>(
-                value: _status,
-                decoration: const InputDecoration(labelText: "Status"),
-                items: const [
-                  DropdownMenuItem(value: 'a_comprar', child: Text('A Comprar')),
-                  DropdownMenuItem(value: 'separado', child: Text('Separado')),
-                  DropdownMenuItem(value: 'entregue', child: Text('Entregue')),
-                ],
-                onChanged: (value) => setState(() => _status = value!),
-              ),
-              const SizedBox(height: 16),
+                      const SizedBox(height: 32),
 
-              if (_status == 'entregue') ...[
-                const Text("Foto da Entrega (obrigatória)", style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                if (_fotoEntrega != null)
-                  Image.file(_fotoEntrega!, height: 200)
-                else
-                  const Text("Nenhuma foto tirada ainda", style: TextStyle(color: Colors.red)),
-                ElevatedButton.icon(
-                  onPressed: _tirarFoto,
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text("Tirar Foto"),
+                      // Dica visual
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.blue.shade100),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.blue.shade700, size: 22),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                "O material será adicionado com status \"A Comprar\".\n"
+                                    "O controle de compras e entrega será feito em outra tela.",
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  color: Colors.blue.shade900,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
 
-              const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _salvar,
-                  child: const Text("ADICIONAR À OBRA"),
+              // ===================== BOTÃO FIXO =====================
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: ElevatedButton(
+                    onPressed: _isSaving ? null : _salvar,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: _isSaving
+                        ? const SizedBox(
+                      height: 24,
+                      width: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.white,
+                      ),
+                    )
+                        : const Text(
+                      "ADICIONAR MATERIAL",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -163,15 +255,12 @@ class _ObraMaterialFormScreenState extends State<ObraMaterialFormScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (_materialIdSelecionado == null) return;
 
-    if (_status == 'entregue' && _fotoEntrega == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("É obrigatório tirar foto quando o status for 'Entregue'")),
-      );
-      return;
-    }
+    setState(() => _isSaving = true);
 
     final materialProvider = context.read<MaterialProvider>();
-    final material = materialProvider.materiais.firstWhere((m) => m.id == _materialIdSelecionado);
+    final material = materialProvider.materiais.firstWhere(
+          (m) => m.id == _materialIdSelecionado,
+    );
 
     final obraMaterial = ObraMaterial(
       id: const Uuid().v4(),
@@ -179,22 +268,33 @@ class _ObraMaterialFormScreenState extends State<ObraMaterialFormScreen> {
       materialId: material.id,
       materialNome: material.nome,
       unidade: material.unidade,
-      quantidade: double.parse(_quantidadeController.text),
-      status: _status,
-      fotoUrl: null,
-      // Não estamos enviando observacao para evitar o erro de coluna
+      quantidade: double.parse(_quantidadeController.text.replaceAll(',', '.')),
+      status: 'a_comprar', // sempre inicia assim
+      fotos: const [],
     );
 
     final sucesso = await materialProvider.adicionarMaterialNaObra(obraMaterial);
 
-    if (sucesso && mounted) {
+    if (!mounted) return;
+
+    setState(() => _isSaving = false);
+
+    if (sucesso) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Material adicionado com sucesso!")),
+        const SnackBar(
+          content: Text("Material adicionado com sucesso!"),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
-      Navigator.pop(context);
-    } else if (mounted) {
+      Navigator.pop(context, true);
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Erro ao adicionar material"), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text("Erro ao adicionar material"),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }

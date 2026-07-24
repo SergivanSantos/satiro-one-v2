@@ -32,8 +32,12 @@ class _ObraWizardStep1DadosBasicosState extends State<ObraWizardStep1DadosBasico
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+   // WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+
       final provider = context.read<ObraWizardProvider>();
+      await provider.carregarFiliais();
+
       final clienteProvider = context.read<ClienteProvider>();
       final parceirosProvider = context.read<ParceirosProvider>();
 
@@ -88,7 +92,7 @@ class _ObraWizardStep1DadosBasicosState extends State<ObraWizardStep1DadosBasico
                   style: TextStyle(color: Colors.grey, fontSize: 14)),
               const SizedBox(height: 24),
 
-              // Cliente
+              // ===================== CLIENTE =====================
               if (clienteSelecionado != null)
                 Card(
                   color: Colors.green[50],
@@ -120,9 +124,56 @@ class _ObraWizardStep1DadosBasicosState extends State<ObraWizardStep1DadosBasico
                   },
                 ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-              // Nome da Obra
+              // ===================== FILIAL =====================
+              Builder(
+                builder: (context) {
+                  final filiais = obraProvider.filiaisDisponiveis;
+                  final currentValue = obraProvider.filialId;
+
+                  // Verifica se o valor atual existe na lista
+                  final bool valorExisteNaLista = currentValue != null &&
+                      filiais.any((f) => f['id'] == currentValue);
+
+                  return DropdownButtonFormField<String?>(
+                    value: valorExisteNaLista ? currentValue : null,
+                    decoration: InputDecoration(
+                      labelText: 'Filial *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.store, size: 20),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                    hint: Text(
+                      filiais.isEmpty
+                          ? "Carregando filiais..."
+                          : "Selecione a filial",
+                    ),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text("Selecione a filial")),
+                      ...filiais.map((filial) {
+                        return DropdownMenuItem(
+                          value: filial['id'] as String,
+                          child: Text(filial['nome'] as String),
+                        );
+                      }),
+                      // Caso especial: se estiver editando e a filial ainda não está na lista
+                      if (currentValue != null && !valorExisteNaLista)
+                        DropdownMenuItem(
+                          value: currentValue,
+                          child: const Text("Filial atual (carregando...)"),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      obraProvider.setFilialId(value);
+                    },
+                  );
+                },
+              ),
+
+              const SizedBox(height: 20),
+
+              // ===================== NOME DA OBRA =====================
               TextField(
                 controller: _nomeController,
                 decoration: InputDecoration(
